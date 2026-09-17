@@ -1,0 +1,13 @@
+node_modules/
+
+.env
+.env.*
+!.env.example
+
+*.local
+*.secret
+credentials.json
+credentials.*.json
+
+dist/
+coverage/

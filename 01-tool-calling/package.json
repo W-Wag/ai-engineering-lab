@@ -1,0 +1,23 @@
+{
+  "name": "ai-engineering-lab",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx src/index.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "tsx": "^4.19.0",
+    "typescript": "^5.7.0"
+  },
+  "allowScripts": {
+    "esbuild@0.28.2": true,
+    "protobufjs@7.6.6": true,
+    "@google/genai@2.23.0": true
+  },
+  "dependencies": {
+    "@google/genai": "^2.23.0",
+    "dotenv": "^17.4.2"
+  }
+}
