@@ -86,8 +86,8 @@ function executarSolicitacao(solicitacao: Solicitacao) {
 }
 
 
-const resultado = executarSolicitacao(solicitacao)
-console.log(resultado)
+// const resultado = executarSolicitacao(solicitacao)
+// console.log(resultado)
 
 // const ana = { profissionalId: "ana", data: "2026-10-10" };
 // const carlos = { profissionalId: "carlos", data: "2026-10-20" };
