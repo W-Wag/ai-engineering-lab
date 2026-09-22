@@ -2,7 +2,7 @@
 
 ## Objetivo
 
-Expor `consultarDisponibilidade` em um servidor MCP local e utilizá-la pelo MCP Inspector e por um cliente TypeScript, sem modelo de IA.
+Expor `consultarDisponibilidade` em um servidor MCP local e utilizá-la pelo MCP Inspector e por clientes TypeScript, sem modelo de IA.
 
 O servidor usa Node.js, TypeScript em modo estrito, módulos ESM, o SDK v2 oficial do MCP e Zod.
 
@@ -20,13 +20,13 @@ MCP e tool calling podem trabalhar juntos: um modelo pode decidir chamar uma fer
 
 ### Cliente MCP
 
-O cliente MCP envia solicitações e recebe respostas do servidor. A comparação com Axios ajuda a entender esse papel: ambos fazem solicitações e recebem respostas, mas são protocolos e abstrações diferentes. Axios é uma biblioteca HTTP; MCP define uma comunicação voltada à descoberta e execução de capacidades.
+O cliente MCP envia solicitações e recebe respostas do servidor. A comparação com Axios ajuda a entender esse papel: ambos enviam solicitações e recebem respostas, mas são protocolos e abstrações diferentes. Axios é uma biblioteca HTTP; MCP define uma comunicação voltada à descoberta e execução de capacidades.
 
 ### Servidor MCP
 
 O servidor MCP disponibiliza ferramentas e executa as funções registradas. Ele recebe uma chamada, encaminha os argumentos para a função e devolve o resultado no formato do protocolo.
 
-A aplicação coordena a interação com o modelo e com o cliente MCP. Neste estudo, não há modelo: o cliente TypeScript envia diretamente a solicitação ao servidor.
+A aplicação coordena a interação com o modelo e com o cliente MCP. Neste estudo, não há modelo: os clientes TypeScript enviam diretamente as solicitações ao servidor.
 
 ## Quando usar
 
@@ -42,7 +42,8 @@ MCP não substitui necessariamente tool calling. Um modelo pode usar tool callin
 
 - `src/server.ts`: cria o servidor MCP, registra a ferramenta e inicia o transporte `stdio`.
 - `src/disponibilidade.ts`: contém os tipos e a função fictícia `consultarDisponibilidade`.
-- `src/client.ts`: cria um cliente MCP, inicia o servidor como processo filho, descobre a ferramenta, chama-a e extrai o resultado textual.
+- `src/client.ts`: conecta por stdio, lista ferramentas, chama `consultarDisponibilidade`, extrai o resultado e fecha a conexão.
+- `src/assistente-simulado.ts`: representa uma solicitação que futuramente poderia vir de um modelo e verifica se a ferramenta está disponível antes de chamar `callTool`.
 - `package.json`: define o projeto ESM, os scripts e as dependências.
 - `tsconfig.json`: configura TypeScript estrito, módulos Node ESM e verificação sem emissão.
 
@@ -54,39 +55,57 @@ MCP não substitui necessariamente tool calling. Um modelo pode usar tool callin
 - `typescript`: verifica os tipos.
 - `@types/node`: tipos das APIs do Node.js.
 
-### Registro e argumentos
+### Cliente MCP e solicitação simulada
+
+`client.ts` usa o SDK MCP para:
+
+1. `connect`: conectar ao servidor pelo transporte stdio;
+2. `listTools`: descobrir as ferramentas disponíveis;
+3. `callTool`: solicitar `consultarDisponibilidade` com `profissionalId` e `data`;
+4. `close`: encerrar a conexão.
+
+O `StdioClientTransport` inicia seu próprio processo servidor usando o executável atual do Node, `--import tsx` e `src/server.ts`. Portanto, executar o cliente já inicia uma instância própria do servidor.
+
+O cliente usa o SDK para toda essa comunicação; o protocolo MCP não foi implementado manualmente. A comparação com Axios ajuda a entender o papel do cliente — enviar solicitações e receber respostas —, mas MCP e HTTP/Axios são protocolos e abstrações diferentes.
+
+Em `assistente-simulado.ts`, `solicitacaoDoModelo` é um objeto com `nome` e `argumentos`. Ele representa uma solicitação que futuramente poderia vir de um modelo. Atualmente, nenhum modelo participa dessa execução.
+
+Antes de chamar `callTool`, a aplicação verifica se `solicitacaoDoModelo.nome` aparece na listagem retornada por `listTools`. Se não aparecer, informa `Ferramenta não disponível` e retorna sem chamar a ferramenta.
+
+### Registro, esquema e transporte
 
 `server.ts` cria um `McpServer` e registra `consultarDisponibilidade` com `registerTool`. O `inputSchema` usa Zod e declara:
 
 - `profissionalId` como string;
 - `data` como string descrita no formato `YYYY-MM-DD`.
 
-O SDK usa esse esquema para descrever os argumentos da ferramenta e validar a entrada antes de chamar o handler. A função de disponibilidade, por sua vez, consulta apenas os dados fictícios definidos no projeto.
+O SDK valida os argumentos conforme esse esquema antes de chamar o handler. A função de disponibilidade, por sua vez, consulta apenas os dados fictícios definidos no projeto.
 
-### Transporte stdio
+`serveStdio(criarServidor)` conecta o servidor à entrada e à saída padrão. Como `stdout` é reservado para o protocolo MCP, logs do servidor devem usar `console.error`, e não `console.log`; um log no `stdout` pode corromper as mensagens JSON-RPC.
 
-`serveStdio(criarServidor)` conecta o servidor à entrada e à saída padrão. O cliente inicia o processo, envia mensagens pelo `stdin` e recebe respostas pelo `stdout`.
+### Validação e tratamento de erros
 
-Como o `stdout` é reservado para o protocolo MCP, logs do servidor devem usar `console.error`, e não `console.log`. Um log no `stdout` pode corromper as mensagens JSON-RPC.
+O servidor valida os argumentos com base no `inputSchema` de Zod. Os tipos TypeScript ajudam durante o desenvolvimento, mas não substituem a validação de dados externos que chegam pelo protocolo.
 
-### Cliente MCP
+No assistente simulado, `resultado.isError === true` não valida novamente os argumentos. Essa verificação trata a falha informada pelo servidor. O código percorre `resultado.content` e exibe os blocos do tipo `text` com a mensagem de erro.
 
-O cliente segue este fluxo:
+Uma resposta com `isError: true` é diferente de uma exceção lançada por `connect`, `listTools` ou `callTool`. A resposta com erro é tratada no fluxo normal do `try`; uma exceção interrompe esse fluxo e é capturada pelo `catch` externo.
 
-1. `connect`: conecta ao servidor pelo transporte stdio.
-2. `listTools`: descobre as ferramentas disponíveis.
-3. `callTool`: solicita `consultarDisponibilidade` com `profissionalId` e `data`.
-4. `close`: encerra a conexão.
+O `return` encerra a execução de `main` naquele ponto. Ele é usado quando a ferramenta não está disponível e quando o servidor informa uma falha, evitando chamar ou processar mais etapas. O `finally` executa `cliente.close()` mesmo quando ocorre retorno ou exceção, garantindo o encerramento da conexão.
 
-No `StdioClientTransport`, o cliente inicia seu próprio processo servidor usando o executável atual do Node, `--import tsx` e `src/server.ts`. Por isso, executar o cliente já inicia uma instância própria do servidor; não é necessário iniciar outra manualmente.
+Esses são os comportamentos realmente implementados. O código não converte automaticamente a mensagem textual de erro em uma nova pergunta ao usuário e não envolve o resultado em uma camada adicional de validação no cliente.
 
-O servidor retorna `content` como uma lista de blocos. Neste projeto há um bloco de texto cujo conteúdo é uma string JSON, por exemplo:
+### Formato do resultado
 
-```json
+A resposta MCP contém blocos em `content`. O cliente extrai o primeiro bloco cujo `type` é `"text"` usando `find` e acessa seu campo `text`.
+
+Neste projeto, o texto pode ser:
+
+```text
 {"horarios":["09:00","14:00"]}
 ```
 
-O cliente usa `find` para extrair o primeiro bloco cujo `type` é `"text"` e imprime seu campo `text`. Esse valor ainda é uma string JSON; o código atual não a converte novamente em objeto JavaScript.
+Esse valor é uma string JSON, não um objeto JavaScript já interpretado. O código atual apenas extrai e imprime o texto; não chama `JSON.parse` nele.
 
 ## Como executar
 
@@ -116,25 +135,31 @@ npx @modelcontextprotocol/inspector npx tsx src/server.ts
 
 No Inspector, conecte ao servidor, abra a aba de ferramentas, selecione `consultarDisponibilidade` e envie os argumentos.
 
-Execute o cliente TypeScript com:
+Execute o cliente MCP com:
 
 ```bash
 npx tsx src/client.ts
 ```
 
-Esse cliente inicia seu próprio processo servidor stdio, conecta, executa `listTools`, chama a ferramenta e fecha a conexão.
+Execute a solicitação simulada com:
+
+```bash
+npx tsx src/assistente-simulado.ts
+```
+
+Os clientes iniciam seus próprios processos servidor stdio. Não é necessário iniciar outro servidor manualmente antes de executar `client.ts` ou `assistente-simulado.ts`.
 
 ## Resultados observados
 
-Conforme execuções manuais relatadas pelo estudante:
+Conforme testes manuais locais relatados pelo usuário:
 
-- O Inspector conectou ao servidor e mostrou sua identificação.
-- A ferramenta foi descoberta por meio de `tools/list`.
-- A consulta da Ana por `tools/call` retornou `09:00` e `14:00`.
-- O cliente TypeScript conectou, listou a ferramenta e realizou a consulta.
-- O cliente extraiu o texto contendo os horários da resposta MCP.
+- Uma consulta válida da Ana retorna `09:00` e `14:00`.
+- Para uma ferramenta desconhecida, a aplicação informa `Ferramenta não disponível` antes de chamar `callTool`.
+- Com os argumentos sem `data`, o servidor retorna erro de validação com `isError: true`.
+- O cliente identifica essa falha e exibe a mensagem de erro.
+- Restaurando a data, a consulta volta a apresentar os horários.
 
-Esses resultados são relatos de execuções manuais do estudante. Não são testes automatizados nem foram executados por este documento.
+Esses são testes locais via MCP, não mocks e não chamadas reais a modelos. Também não são testes automatizados nem foram executados por este documento.
 
 ## Limitações e próximos passos
 
@@ -143,3 +168,13 @@ Esses resultados são relatos de execuções manuais do estudante. Não são tes
 - Uma lista vazia não distingue profissional inexistente de ausência de horários.
 - A integração entre um modelo e um cliente MCP ainda não foi implementada.
 - As avaliações pendentes do Gemini pertencem ao estudo `01-tool-calling`.
+
+### Próxima etapa
+
+Integrar o modelo ao cliente MCP:
+
+```text
+solicitação do modelo → execução pelo MCP → envio do resultado ou erro ao modelo → resposta ao usuário
+```
+
+Futuramente, o modelo poderá transformar um erro como `data ausente` em uma pergunta de esclarecimento. Esse comportamento ainda não está implementado nem validado neste estudo.
