@@ -45,7 +45,7 @@ async function main() {
     {
       model: "gemini-3.8-flash",
       system_instruction: instrucoesAssistente,
-      input: "O que você consegue fazer?",
+      input: "Quais horários o profissional carlos tem em 20 de outubro de 2026?",
       tools: [ferramentaConsultarDisponibilidade],
     },
     requestOptions,

@@ -2,110 +2,73 @@
 
 ## Objetivo
 
-Expor `consultarDisponibilidade` em um servidor MCP local e utilizá-la pelo MCP Inspector e por clientes TypeScript, sem modelo de IA.
+Integrar um modelo hospedado na Groq a ferramentas descobertas e executadas por um cliente MCP conectado a um servidor local.
 
-O servidor usa Node.js, TypeScript em modo estrito, módulos ESM, o SDK v2 oficial do MCP e Zod.
+O servidor expõe `consultarDisponibilidade` por stdio. O cliente MCP descobre essa ferramenta, adapta sua descrição para o formato aceito pela Groq e coordena as chamadas ao modelo e ao servidor MCP.
 
-## Conceitos aprendidos
+## Conceitos anteriores
 
-### Tool calling
+MCP padroniza como clientes descobrem ferramentas, conhecem seus argumentos, solicitam execuções e recebem resultados. Tool calling permite que um modelo solicite uma ferramenta com argumentos; a aplicação valida e executa a operação.
 
-Em tool calling, o modelo solicita uma ferramenta com argumentos. A aplicação valida esses argumentos e executa a operação correspondente.
+Neste estudo, o cliente MCP faz a ponte entre o modelo Groq e o servidor local. O cliente MCP não escolhe sozinho qual ferramenta usar: o modelo retorna `tool_calls`, e a aplicação decide como encaminhar cada chamada.
 
-### MCP
+## Fluxo implementado
 
-MCP é um protocolo que padroniza como clientes descobrem ferramentas, conhecem seus argumentos, solicitam execuções e recebem resultados. Ele pode ser usado entre sistemas internos ou externos.
+Em `src/assistente-groq.ts`, o fluxo atual é:
 
-MCP e tool calling podem trabalhar juntos: um modelo pode decidir chamar uma ferramenta exposta por um servidor MCP. Neste estudo, o cliente MCP chama a ferramenta diretamente, sem modelo.
+1. Conectar o cliente MCP ao servidor local por stdio.
+2. Descobrir as ferramentas com `listTools`.
+3. Adaptar `name`, `description` e `inputSchema` para o formato `tools` da Groq.
+4. Enviar ao modelo Groq o pedido, as instruções e as ferramentas descobertas.
+5. Receber `tool_calls` ou uma resposta textual direta.
+6. Quando há `tool_calls`, interpretar os argumentos JSON e encaminhar a chamada pelo cliente MCP.
+7. Acrescentar a mensagem do modelo e os resultados das ferramentas ao histórico, associando cada resultado ao respectivo `tool_call_id`.
+8. Fazer uma segunda chamada à Groq para gerar a resposta ao usuário.
+9. Fechar a conexão MCP no bloco `finally`.
 
-### Cliente MCP
+A aplicação coordena o modelo e o cliente MCP. O servidor MCP valida os argumentos conforme seu `inputSchema` e executa a função registrada. A segunda chamada à Groq não recebe `tools`; ela recebe apenas o histórico atualizado com a mensagem do modelo e os resultados das ferramentas.
 
-O cliente MCP envia solicitações e recebe respostas do servidor. A comparação com Axios ajuda a entender esse papel: ambos enviam solicitações e recebem respostas, mas são protocolos e abstrações diferentes. Axios é uma biblioteca HTTP; MCP define uma comunicação voltada à descoberta e execução de capacidades.
+Este é um fluxo limitado, não um loop autônomo completo: o código faz uma chamada inicial, processa os `tool_calls` retornados e faz uma única chamada final. Não há um ciclo que continue tratando novas solicitações de ferramenta geradas pela resposta final.
 
-### Servidor MCP
+## Arquivos e dependências
 
-O servidor MCP disponibiliza ferramentas e executa as funções registradas. Ele recebe uma chamada, encaminha os argumentos para a função e devolve o resultado no formato do protocolo.
+- `src/server.ts`: registra `consultarDisponibilidade` no servidor MCP e inicia o transporte stdio.
+- `src/disponibilidade.ts`: contém os tipos e a função com dados fictícios.
+- `src/client.ts`: cliente MCP básico que conecta, lista ferramentas, chama a ferramenta e fecha a conexão.
+- `src/assistente-simulado.ts`: simula uma solicitação com nome e argumentos e trata respostas com `isError`.
+- `src/assistente-groq.ts`: integra o modelo Groq ao cliente MCP.
+- `package.json`: define o projeto ESM, scripts e dependências.
+- `tsconfig.json`: configura TypeScript estrito e verificação sem emissão.
 
-A aplicação coordena a interação com o modelo e com o cliente MCP. Neste estudo, não há modelo: os clientes TypeScript enviam diretamente as solicitações ao servidor.
+As dependências principais são `@modelcontextprotocol/client`, `@modelcontextprotocol/server`, `zod`, `groq-sdk`, `tsx` e `typescript`.
 
-## Quando usar
+O programa Groq acessa `GROQ_API_KEY` por meio de `shared/env.ts`, que carrega o arquivo `.env` esperado na raiz de `ai-engineering-lab`. A documentação usa apenas este placeholder:
 
-- **Endpoint HTTP:** consultar horários em uma interface convencional, como uma aplicação web ou mobile.
-- **Tool calling direto:** permitir que um assistente solicite operações conhecidas pela própria aplicação.
-- **MCP:** disponibilizar capacidades para diferentes clientes compatíveis por meio de um contrato comum.
-
-MCP não substitui necessariamente tool calling. Um modelo pode usar tool calling para decidir uma operação e, por trás dessa operação, um cliente pode chamar uma ferramenta MCP.
-
-## Implementação
-
-### Arquivos
-
-- `src/server.ts`: cria o servidor MCP, registra a ferramenta e inicia o transporte `stdio`.
-- `src/disponibilidade.ts`: contém os tipos e a função fictícia `consultarDisponibilidade`.
-- `src/client.ts`: conecta por stdio, lista ferramentas, chama `consultarDisponibilidade`, extrai o resultado e fecha a conexão.
-- `src/assistente-simulado.ts`: representa uma solicitação que futuramente poderia vir de um modelo e verifica se a ferramenta está disponível antes de chamar `callTool`.
-- `package.json`: define o projeto ESM, os scripts e as dependências.
-- `tsconfig.json`: configura TypeScript estrito, módulos Node ESM e verificação sem emissão.
-
-### Dependências
-
-- `@modelcontextprotocol/server` e `@modelcontextprotocol/client`: SDK v2 oficial do MCP.
-- `zod`: define o esquema dos argumentos da ferramenta.
-- `tsx`: executa arquivos TypeScript.
-- `typescript`: verifica os tipos.
-- `@types/node`: tipos das APIs do Node.js.
-
-### Cliente MCP e solicitação simulada
-
-`client.ts` usa o SDK MCP para:
-
-1. `connect`: conectar ao servidor pelo transporte stdio;
-2. `listTools`: descobrir as ferramentas disponíveis;
-3. `callTool`: solicitar `consultarDisponibilidade` com `profissionalId` e `data`;
-4. `close`: encerrar a conexão.
-
-O `StdioClientTransport` inicia seu próprio processo servidor usando o executável atual do Node, `--import tsx` e `src/server.ts`. Portanto, executar o cliente já inicia uma instância própria do servidor.
-
-O cliente usa o SDK para toda essa comunicação; o protocolo MCP não foi implementado manualmente. A comparação com Axios ajuda a entender o papel do cliente — enviar solicitações e receber respostas —, mas MCP e HTTP/Axios são protocolos e abstrações diferentes.
-
-Em `assistente-simulado.ts`, `solicitacaoDoModelo` é um objeto com `nome` e `argumentos`. Ele representa uma solicitação que futuramente poderia vir de um modelo. Atualmente, nenhum modelo participa dessa execução.
-
-Antes de chamar `callTool`, a aplicação verifica se `solicitacaoDoModelo.nome` aparece na listagem retornada por `listTools`. Se não aparecer, informa `Ferramenta não disponível` e retorna sem chamar a ferramenta.
-
-### Registro, esquema e transporte
-
-`server.ts` cria um `McpServer` e registra `consultarDisponibilidade` com `registerTool`. O `inputSchema` usa Zod e declara:
-
-- `profissionalId` como string;
-- `data` como string descrita no formato `YYYY-MM-DD`.
-
-O SDK valida os argumentos conforme esse esquema antes de chamar o handler. A função de disponibilidade, por sua vez, consulta apenas os dados fictícios definidos no projeto.
-
-`serveStdio(criarServidor)` conecta o servidor à entrada e à saída padrão. Como `stdout` é reservado para o protocolo MCP, logs do servidor devem usar `console.error`, e não `console.log`; um log no `stdout` pode corromper as mensagens JSON-RPC.
-
-### Validação e tratamento de erros
-
-O servidor valida os argumentos com base no `inputSchema` de Zod. Os tipos TypeScript ajudam durante o desenvolvimento, mas não substituem a validação de dados externos que chegam pelo protocolo.
-
-No assistente simulado, `resultado.isError === true` não valida novamente os argumentos. Essa verificação trata a falha informada pelo servidor. O código percorre `resultado.content` e exibe os blocos do tipo `text` com a mensagem de erro.
-
-Uma resposta com `isError: true` é diferente de uma exceção lançada por `connect`, `listTools` ou `callTool`. A resposta com erro é tratada no fluxo normal do `try`; uma exceção interrompe esse fluxo e é capturada pelo `catch` externo.
-
-O `return` encerra a execução de `main` naquele ponto. Ele é usado quando a ferramenta não está disponível e quando o servidor informa uma falha, evitando chamar ou processar mais etapas. O `finally` executa `cliente.close()` mesmo quando ocorre retorno ou exceção, garantindo o encerramento da conexão.
-
-Esses são os comportamentos realmente implementados. O código não converte automaticamente a mensagem textual de erro em uma nova pergunta ao usuário e não envolve o resultado em uma camada adicional de validação no cliente.
-
-### Formato do resultado
-
-A resposta MCP contém blocos em `content`. O cliente extrai o primeiro bloco cujo `type` é `"text"` usando `find` e acessa seu campo `text`.
-
-Neste projeto, o texto pode ser:
-
-```text
-{"horarios":["09:00","14:00"]}
+```env
+GROQ_API_KEY=seu-placeholder-aqui
 ```
 
-Esse valor é uma string JSON, não um objeto JavaScript já interpretado. O código atual apenas extrai e imprime o texto; não chama `JSON.parse` nele.
+O arquivo real de credenciais não deve ser incluído na documentação nem versionado.
+
+O modelo usado é:
+
+```text
+openai/gpt-oss-20b
+```
+
+O cliente Groq está configurado com timeout de `30_000` milissegundos e `maxRetries: 0`, ou seja, sem novas tentativas automáticas.
+
+## Tratamento de falhas
+
+O comportamento implementado diferencia estes casos:
+
+- **Ferramenta desconhecida:** no fluxo Groq atual, o código ainda não faz uma verificação explícita do nome recebido contra a lista de ferramentas antes de `callTool`. Essa é uma lacuna da implementação.
+- **JSON inválido:** `JSON.parse` é usado nos argumentos retornados pelo modelo. Se falhar, a exceção cai no `catch` externo e é impressa. O código não apresenta uma mensagem específica para JSON inválido.
+- **Argumentos rejeitados pelo servidor:** o cliente encaminha o objeto ao MCP; a validação ocorre no servidor, conforme o schema Zod. A resposta pode indicar erro.
+- **Resposta MCP com `isError`:** `assistente-groq.ts` não verifica `resultado.isError` separadamente. Ele serializa o resultado e o acrescenta ao histórico como resposta da ferramenta. O tratamento explícito de `isError` existe em `assistente-simulado.ts`.
+- **Exceção de conexão ou API:** erros lançados pelo cliente MCP ou pela Groq são capturados pelo `catch`, que imprime o erro. O `finally` chama `await cliente.close()` para encerrar a conexão mesmo após falha.
+
+O código não implementa uma política adicional de retry, não executa a ferramenta localmente fora do MCP e não converte automaticamente erros em pedidos de esclarecimento.
 
 ## Como executar
 
@@ -121,60 +84,52 @@ Verifique os tipos:
 npm run typecheck
 ```
 
-Inicie o servidor diretamente:
+Inicie o servidor MCP diretamente:
 
 ```bash
 npm start
 ```
 
-Um servidor stdio aguarda mensagens de um cliente. Para testá-lo com o MCP Inspector:
+Teste o servidor pelo MCP Inspector:
 
 ```bash
 npx @modelcontextprotocol/inspector npx tsx src/server.ts
 ```
 
-No Inspector, conecte ao servidor, abra a aba de ferramentas, selecione `consultarDisponibilidade` e envie os argumentos.
-
-Execute o cliente MCP com:
+Execute o cliente MCP básico:
 
 ```bash
 npx tsx src/client.ts
 ```
 
-Execute a solicitação simulada com:
+Execute o assistente simulado:
 
 ```bash
 npx tsx src/assistente-simulado.ts
 ```
 
-Os clientes iniciam seus próprios processos servidor stdio. Não é necessário iniciar outro servidor manualmente antes de executar `client.ts` ou `assistente-simulado.ts`.
+Execute a integração Groq + MCP:
 
-## Resultados observados
+```bash
+npx tsx src/assistente-groq.ts
+```
 
-Conforme testes manuais locais relatados pelo usuário:
+Os clientes stdio iniciam seus próprios processos servidor. Não é necessário iniciar outro servidor manualmente antes de executar os clientes.
 
-- Uma consulta válida da Ana retorna `09:00` e `14:00`.
-- Para uma ferramenta desconhecida, a aplicação informa `Ferramenta não disponível` antes de chamar `callTool`.
-- Com os argumentos sem `data`, o servidor retorna erro de validação com `isError: true`.
-- O cliente identifica essa falha e exibe a mensagem de erro.
-- Restaurando a data, a consulta volta a apresentar os horários.
+## Resultados desta etapa
 
-Esses são testes locais via MCP, não mocks e não chamadas reais a modelos. Também não são testes automatizados nem foram executados por este documento.
+Os testes manuais da integração Groq + MCP estão registrados em [avaliacoes.md](avaliacoes.md). Foram chamadas reais à Groq com o servidor MCP local, não mocks nem testes automatizados.
+
+A integração técnica funcionou nas execuções relatadas: o cliente conectou, descobriu a ferramenta, encaminhou chamadas ao MCP, recebeu resultados, fez a chamada final ao modelo e encerrou com `cliente.close()` e `main()` concluídos.
+
+As respostas ainda apresentam limitações de precisão. Instruções no prompt orientam o modelo, mas não garantem comportamento correto em todos os casos. Os resultados da Groq não validam os casos pendentes do Gemini no estudo `01-tool-calling`.
 
 ## Limitações e próximos passos
 
 - Os dados são fictícios e não há banco de dados.
-- A ferramenta apenas consulta disponibilidade; não cria nem cancela agendamentos.
+- Apenas consulta de disponibilidade foi implementada; criar e cancelar agendamentos não foram implementados.
 - Uma lista vazia não distingue profissional inexistente de ausência de horários.
-- A integração entre um modelo e um cliente MCP ainda não foi implementada.
-- As avaliações pendentes do Gemini pertencem ao estudo `01-tool-calling`.
-
-### Próxima etapa
-
-Integrar o modelo ao cliente MCP:
-
-```text
-solicitação do modelo → execução pelo MCP → envio do resultado ou erro ao modelo → resposta ao usuário
-```
-
-Futuramente, o modelo poderá transformar um erro como `data ausente` em uma pergunta de esclarecimento. Esse comportamento ainda não está implementado nem validado neste estudo.
+- O nome recebido pelo modelo ainda não é conferido explicitamente contra as ferramentas descobertas antes de `callTool`.
+- A resposta MCP com `isError` ainda não recebe tratamento específico no fluxo Groq.
+- O fluxo não é um loop autônomo completo.
+- A integração entre modelo e cliente MCP foi concluída tecnicamente, mas os casos de avaliação do Gemini continuam pertencendo ao estudo 01.

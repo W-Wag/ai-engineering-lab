@@ -138,11 +138,17 @@ O que você consegue fazer?
 ### Após executar
 
 - Houve solicitação de ferramenta? Qual?
+  Não.
+
 - Resposta do modelo:
+  “Eu posso consultar a disponibilidade de horários de
+  profissionais em datas específicas.
+
+  Para isso, basta me informar o identificador do profissional
+  e a data desejada para a consulta.”
+
 - Atendeu à expectativa? Por quê?
+  Sim. Explicou sua capacidade sem consultar a ferramenta
+  e sem prometer operações não implementadas.
 
-**Status:** bloqueado por limite diário da API.
-
-Resultado observado:
-HTTP 429 — limite de 20 requisições por dia no Free Tier.
-Nenhuma resposta do modelo disponível para avaliação.
+**Status:** aprovado nesta execução manual com API real.
