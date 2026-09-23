@@ -1,6 +1,12 @@
-import "dotenv/config";
+import * as dotenv from "dotenv";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { GoogleGenAI } from "@google/genai";
 import { consultarDisponibilidade, eConsultaValida } from "./index.js";
+
+dotenv.config({
+  path: resolve(dirname(fileURLToPath(import.meta.url)), "../../.env"),
+});
 
 const ferramentaConsultarDisponibilidade = {
   type: "function" as const,
