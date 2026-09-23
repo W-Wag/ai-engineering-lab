@@ -1,12 +1,6 @@
-import * as dotenv from "dotenv";
-import { dirname, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
 import { GoogleGenAI } from "@google/genai";
 import { consultarDisponibilidade, eConsultaValida } from "./index.js";
-
-dotenv.config({
-  path: resolve(dirname(fileURLToPath(import.meta.url)), "../../.env"),
-});
+import { env } from "../../shared/env.js";
 
 const ferramentaConsultarDisponibilidade = {
   type: "function" as const,
@@ -39,13 +33,7 @@ Esse resultado não confirma se o profissional está cadastrado nem explica a au
 Quando houver horários, apresente somente os horários retornados.`;
 
 async function main() {
-  const apiKey = process.env.GEMINI_API_KEY;
-
-  if (!apiKey) {
-    throw new Error("GEMINI_API_KEY não foi encontrada.");
-  }
-
-  const ai = new GoogleGenAI({ apiKey });
+  const ai = new GoogleGenAI({ apiKey: env.GEMINI_API_KEY });
   const requestOptions = {
     timeout_ms: 60_000,
     retries: { strategy: "none" as const },
