@@ -1,0 +1,14 @@
+{
+  "name": "estudo-03-harness",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "tsx src/harness-simulado.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "tsx": "^4.0.0",
+    "typescript": "^6.0.0"
+  }
+}
