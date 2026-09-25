@@ -158,6 +158,86 @@ No último cenário, a contagem relatada foi:
 - 4 tentativas de execução;
 - 2 resultados registrados.
 
+## Harness com modelo real
+
+O arquivo `src/harness-groq.ts` substitui `simularModelo` por chamadas reais
+à Groq usando `openai/gpt-oss-20b`. A integração mantém `mensagens` e
+`ferramentas` fora do ciclo e limita o fluxo a três chamadas ao modelo.
+
+Em cada iteração, a mensagem do modelo é adicionada ao histórico. Quando há
+`tool_calls`, o código confere o nome da ferramenta, interpreta os argumentos
+JSON como `unknown`, valida-os com `eConsultaValida` e executa
+`consultarDisponibilidade` localmente. Esse fluxo não usa MCP nem a falha
+temporária artificial do harness simulado.
+
+Cada resultado é registrado com `role: "tool"`, o `tool_call_id` da chamada
+correspondente e o resultado convertido para texto com `JSON.stringify`. A
+próxima iteração envia o histórico atualizado à Groq. Uma resposta textual
+sem `tool_calls` é exibida e encerra o ciclo com `resposta_final`; sem texto
+nem ferramentas, o encerramento é `sem_resposta`.
+
+### Configuração e limites
+
+O cliente Groq usa timeout de 30 segundos e `maxRetries: 0`. O SDK não faz
+novas tentativas automáticas das chamadas da API. Isso é diferente de:
+
+- `limiteDeChamadas`, que limita as chamadas ao modelo real;
+- o ciclo de duas tentativas do harness simulado;
+- `maxRetries`, que controla as tentativas automáticas do SDK da Groq.
+
+As tentativas com `ErroTemporario` e a espera de 1 segundo não foram
+integradas ao fluxo real de `harness-groq.ts`.
+
+### Execuções reais relatadas
+
+As execuções abaixo foram chamadas reais à Groq com a função local, relatadas
+pelo usuário. Não são mocks nem testes automatizados.
+
+No primeiro cenário, o pedido era consultar Carlos em `2026-10-20` e, se não
+houvesse horários, consultar Ana na mesma data:
+
+- chamada 1: `consultarDisponibilidade` para Carlos;
+- resultado local: `{ horarios: [] }`;
+- chamada 2: `consultarDisponibilidade` para Ana;
+- resultado local: `{ horarios: ["09:00", "14:00"] }`;
+- chamada 3: resposta final com os horários de Ana;
+- as duas solicitações tiveram IDs distintos e cada resultado foi associado
+  ao seu respectivo `tool_call_id`;
+- encerramento: `resposta_final`;
+- `main()` foi concluído.
+
+O fluxo técnico foi bem-sucedido, mas a resposta terminou com “Se precisar
+marcar algum horário, me avise!”, sugerindo uma capacidade de agendamento que
+não existe. Essa execução foi aprovada com ressalva.
+
+Depois, as instruções do sistema foram ajustadas para informar que o
+assistente apenas consulta disponibilidade e não cria, reserva, altera ou
+cancela agendamentos. As frases foram organizadas em um array com
+`join(" ")`.
+
+Na nova execução do mesmo cenário, relatada pelo usuário, Carlos retornou
+lista vazia, Ana retornou `09:00` e `14:00`, e a resposta final foi:
+
+```text
+Horários disponíveis de Ana em 20 de outubro de 2026:
+- 09:00
+- 14:00
+```
+
+Não houve oferta de criar agendamento, o encerramento foi `resposta_final` e
+`main()` foi concluído. Essa execução foi aprovada para os critérios do
+cenário, sem representar garantia para pedidos futuros.
+
+As execuções reais confirmaram o caminho Carlos → Ana → resposta final, mas
+não comprovaram todos os caminhos de erro do harness real. Os tratamentos de
+ferramenta desconhecida, argumentos inválidos, JSON inválido, ausência de
+mensagem e ausência de resposta estão no código, mas não foram todos
+exercitados nos logs relatados.
+
+As instruções orientam a resposta textual do modelo; o código controla quais
+operações podem ser executadas. Neste harness, apenas
+`consultarDisponibilidade` está disponível.
+
 ## Como executar
 
 Na pasta `03-harness`:
@@ -171,6 +251,22 @@ npm start
 O script `start` executa `src/harness-simulado.ts` com `tsx`. O script
 `typecheck` executa o compilador TypeScript sem emitir arquivos. O projeto
 usa módulos ESM e TypeScript estrito.
+
+O harness real não é o alvo do script `start`. Para executá-lo diretamente:
+
+```bash
+npx tsx src/harness-groq.ts
+```
+
+O programa espera a variável de ambiente `GROQ_API_KEY`. Na documentação,
+use apenas um placeholder:
+
+```text
+GROQ_API_KEY=seu-placeholder-aqui
+```
+
+A chave é carregada por `shared/env.ts`; o valor real deve permanecer no
+arquivo de ambiente local.
 
 ## Limitações e próximos passos
 

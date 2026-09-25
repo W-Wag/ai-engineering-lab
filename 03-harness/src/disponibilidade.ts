@@ -20,3 +20,15 @@ export function consultarDisponibilidade(
 
   return { horarios: [] };
 }
+
+export function eConsultaValida(valor: unknown): valor is ConsultaDisponibilidade {
+  if (typeof valor !== "object" || valor === null || Array.isArray(valor)) {
+    return false;
+  }
+
+  const objeto = valor as Record<string, unknown>;
+
+  return (
+    typeof objeto.profissionalId === "string" && typeof objeto.data === "string"
+  );
+}
