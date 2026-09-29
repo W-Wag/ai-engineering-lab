@@ -3,37 +3,51 @@ import {
   consultarDisponibilidade,
   Disponibilidade,
 } from "./disponibilidade.js";
+import { pathToFileURL } from "node:url";
 
-type RespostaDoModelo =
+export type RespostaDoModelo =
   | {
       tipo: "solicitar_ferramenta";
       nome: string;
-      argumentos: {
-        profissionalId: string;
-        data: string;
-      };
+      argumentos: ConsultaDisponibilidade;
     }
   | {
       tipo: "resposta_final";
       texto: string;
     };
 
-type ResultadoDaFerramenta = {
+export type ResultadoDaFerramenta = {
   nome: string;
-  argumentos?: {
-    profissionalId: string;
-    data: string;
-  };
-  resultado: { horarios: string[] };
+  argumentos: ConsultaDisponibilidade;
+  resultado: Disponibilidade;
 };
 
-function esperar(ms: number): Promise<void> {
+type MotivoEncerramento =
+  | "resposta_final"
+  | "sem_resposta"
+  | "limite_atingido"
+  | "ferramenta_desconhecida"
+  | "erro_ferramenta";
+
+export type SimularModelo = (
+  resultados: ResultadoDaFerramenta[],
+) => RespostaDoModelo;
+
+export type ExecutarFerramenta = (
+  argumentos: ConsultaDisponibilidade,
+) => Disponibilidade;
+
+export type Esperar = (ms: number) => Promise<void>
+
+export class ErroTemporario extends Error {}
+
+function esperarReal(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 function simularModelo(resultados: ResultadoDaFerramenta[]): RespostaDoModelo {
   if (resultados.length <= 0) {
-    const novaSolicitacao: RespostaDoModelo = {
+    return {
       tipo: "solicitar_ferramenta",
       nome: "consultarDisponibilidade",
       argumentos: {
@@ -41,17 +55,16 @@ function simularModelo(resultados: ResultadoDaFerramenta[]): RespostaDoModelo {
         data: "2026-10-20",
       },
     };
-
-    return novaSolicitacao;
   }
-
 
   const ultimoResultado = resultados[resultados.length - 1];
   const horarios = ultimoResultado.resultado.horarios;
 
-    if (ultimoResultado.argumentos?.profissionalId === "carlos" && horarios.length <= 0) {
-    tentativasDaConsulta = 0
-    const novaSolicitacao: RespostaDoModelo = {
+  if (
+    ultimoResultado.argumentos.profissionalId === "carlos" &&
+    horarios.length <= 0
+  ) {
+    return {
       tipo: "solicitar_ferramenta",
       nome: "consultarDisponibilidade",
       argumentos: {
@@ -59,15 +72,12 @@ function simularModelo(resultados: ResultadoDaFerramenta[]): RespostaDoModelo {
         data: "2026-10-20",
       },
     };
-
-    return novaSolicitacao;
   }
 
   if (horarios.length > 0) {
-    const horariosDisponiveis = horarios.join(", ");
     return {
       tipo: "resposta_final",
-      texto: `Para esse profissional ${ultimoResultado.argumentos?.profissionalId} os horários disponíveis são ${horariosDisponiveis}`,
+      texto: `Para esse profissional ${ultimoResultado.argumentos.profissionalId} os horários disponíveis são ${horarios.join(", ")}`,
     };
   }
 
@@ -77,132 +87,109 @@ function simularModelo(resultados: ResultadoDaFerramenta[]): RespostaDoModelo {
   };
 }
 
-// function simularModeloRepetitivo(
-//   _resultados: ResultadoDaFerramenta[]
-// ): RespostaDoModelo {
-//   return {
-//     tipo: "solicitar_ferramenta",
-//     nome: "consultarDisponibilidade",
-//     argumentos: {
-//       profissionalId: "ana",
-//       data: "2026-10-20",
-//     },
-//   };
-// }
+export type ResultadoDoHarness = {
+  motivoEncerramento: MotivoEncerramento;
+  resultadosDasFerramentas: ResultadoDaFerramenta[];
+};
 
-// const respostasSimuladas: RespostaDoModelo[] = [
-//   {
-//     tipo: "solicitar_ferramenta",
-//     nome: "consultarDisponibilidade",
-//     argumentos: {
-//       profissionalId: "ana",
-//       data: "2026-10-20",
-//     },
-//   },
-//   {
-//     tipo: "resposta_final",
-//     texto: "Encontrei horários às 09:00 e às 14:00.",
-//   },
-// ];
+export async function executarHarness(
+  modelo: SimularModelo = simularModelo,
+  executarFerramenta?: ExecutarFerramenta,
+  esperar?: Esperar
+): Promise<ResultadoDoHarness> {
+  const limiteDeChamadas = 3;
+  let motivoEncerramento: MotivoEncerramento = "limite_atingido";
+  const resultadosDasFerramentas: ResultadoDaFerramenta[] = [];
+  let tentativasDaConsulta = 0;
+  let falhasSimuladas = 0;
 
-const limiteDeChamadas = 3;
+  const executarConsultaComFalhaTemporaria: ExecutarFerramenta = (
+    argumentos,
+  ) => {
+    falhasSimuladas++;
 
-let motivoEncerramento:
-  | "resposta_final"
-  | "sem_resposta"
-  | "limite_atingido"
-  | "ferramenta_desconhecida"
-  | "erro_ferramenta" = "limite_atingido";
+    if (falhasSimuladas === 1) {
+      throw new ErroTemporario("Falha temporária simulada.");
+    }
 
-const resultadosDasFerramentas: {
-  nome: string;
-  argumentos: {
-    profissionalId: string;
-    data: string;
+    return consultarDisponibilidade(argumentos);
   };
-  resultado: { horarios: string[] };
-}[] = [];
 
-let tentativasDaConsulta = 0;
+  const executarFerramentaAtual =
+    executarFerramenta ?? executarConsultaComFalhaTemporaria;
+  const esperarAtual =
+    esperar ?? esperarReal;
 
-function executarConsultaComFalhaTemporaria(
-  argumentos: ConsultaDisponibilidade,
-): Disponibilidade {
-  tentativasDaConsulta++;
-  console.log("tentativas: ", tentativasDaConsulta);
+  for (let i = 0; i < limiteDeChamadas; i++) {
+    console.log(`Chamada de número: ${i + 1}`);
 
-  if (tentativasDaConsulta === 1) {
-    throw new ErroTemporario("Falha temporária simulada.");
-  }
+    const respostaAtual = modelo(resultadosDasFerramentas);
 
-  return consultarDisponibilidade(argumentos);
-}
-
-class ErroTemporario extends Error {}
-
-for (let i = 0; i < limiteDeChamadas; i++) {
-  console.log(`Chamada de número: ${i + 1}`);
-
-  const respostaAtual = simularModelo(resultadosDasFerramentas);
-
-  if (!respostaAtual) {
-    console.log("Mais nenhuma resposta encontrada");
-    motivoEncerramento = "sem_resposta";
-    break;
-  }
-
-  if (respostaAtual.tipo === "solicitar_ferramenta") {
-    if (respostaAtual.nome !== "consultarDisponibilidade") {
-      console.log("Essa ferramenta não esta disponível");
-      motivoEncerramento = "ferramenta_desconhecida";
+    if (!respostaAtual) {
+      console.log("Mais nenhuma resposta encontrada");
+      motivoEncerramento = "sem_resposta";
       break;
     }
 
-    let resultado: Disponibilidade;
-    while (tentativasDaConsulta < 2) {
-      try {
-        resultado = executarConsultaComFalhaTemporaria(
-          respostaAtual.argumentos,
-        );
-        resultadosDasFerramentas.push({
-          nome: respostaAtual.nome,
-          argumentos: respostaAtual.argumentos,
-          resultado: resultado,
-        });
-
-        console.log("\nConsulta executada!\n");
+    if (respostaAtual.tipo === "solicitar_ferramenta") {
+      if (respostaAtual.nome !== "consultarDisponibilidade") {
+        console.log("Essa ferramenta não esta disponível");
+        motivoEncerramento = "ferramenta_desconhecida";
         break;
-      } catch (erro) {
-        console.error(
-          erro instanceof Error
-            ? erro.message
-            : "Erro desconhecido ao executar a ferramenta",
-        );
+      }
 
-        if (erro instanceof ErroTemporario && tentativasDaConsulta < 2) {
-          console.log("Falha temporária. Nova tentativa em 1 segundo.");
-          await esperar(1_000);
-          continue;
+      let resultado: Disponibilidade;
+      while (tentativasDaConsulta < 2) {
+        try {
+          tentativasDaConsulta++;
+          resultado = executarFerramentaAtual(respostaAtual.argumentos);
+          resultadosDasFerramentas.push({
+            nome: respostaAtual.nome,
+            argumentos: respostaAtual.argumentos,
+            resultado,
+          });
+
+          console.log("\nConsulta executada!\n");
+          tentativasDaConsulta = 0
+          break;
+        } catch (erro) {
+          console.error(
+            erro instanceof Error
+              ? erro.message
+              : "Erro desconhecido ao executar a ferramenta",
+          );
+
+          if (erro instanceof ErroTemporario && tentativasDaConsulta < 2) {
+            console.log("Falha temporária. Nova tentativa em 1 segundo.");
+            await esperarAtual(1_000);
+            continue;
+          }
+
+          motivoEncerramento = "erro_ferramenta";
+          break;
         }
-        motivoEncerramento = "erro_ferramenta";
+      }
+
+      if (motivoEncerramento === "erro_ferramenta") {
+        console.log("Ocorreu um erro ao executar a ferramenta");
         break;
       }
     }
+
+    if (respostaAtual.tipo === "resposta_final") {
+      console.log(respostaAtual.texto);
+      motivoEncerramento = "resposta_final";
+      break;
+    }
   }
 
-  if (motivoEncerramento === "erro_ferramenta") {
-    console.log("Ocorreu um erro ao executar a ferramenta");
-    break;
-  }
+  console.log("Resultados Registrados: ");
+  console.dir(resultadosDasFerramentas, { depth: null });
+  console.log("Motivo de encerramento: ", motivoEncerramento);
 
-  if (respostaAtual.tipo === "resposta_final") {
-    console.log(respostaAtual.texto);
-    motivoEncerramento = "resposta_final";
-    break;
-  }
+  return { motivoEncerramento, resultadosDasFerramentas };
 }
 
-console.log("Resultados Registrados: ");
-console.dir(resultadosDasFerramentas, { depth: null });
-
-console.log("Motivo de encerramento: ", motivoEncerramento);
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  executarHarness();
+}

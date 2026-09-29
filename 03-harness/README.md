@@ -158,6 +158,60 @@ No último cenário, a contagem relatada foi:
 - 4 tentativas de execução;
 - 2 resultados registrados.
 
+## Harness consolidado e testes automatizados
+
+Os seis cenários automatizados usam a mesma implementação de
+`executarHarness`, em `src/harness-simulado.ts`. Cada teste injeta suas
+próprias funções de modelo, ferramenta e espera, variando apenas as
+dependências simuladas.
+
+Importar o módulo não inicia automaticamente o harness. A execução direta
+continua disponível pelo script de estudo, enquanto `executarHarness` retorna
+`motivoEncerramento` e `resultadosDasFerramentas` para as asserções.
+
+O harness controla o limite de chamadas ao modelo, as tentativas da
+ferramenta, a espera entre tentativas e o registro dos resultados.
+
+| Cenário | Chamadas ao modelo | Tentativas da ferramenta | Resultados registrados | Encerramento | Esperas em ms |
+| --- | ---: | ---: | ---: | --- | ---: |
+| Resposta final imediata | 1 | 0 | 0 | `resposta_final` | `[]` |
+| Solicitações contínuas até o limite | 3 | 3 | 3 | `limite_atingido` | `[]` |
+| Falha temporária seguida de sucesso | 2 | 2 | 1 | `resposta_final` | `[1000]` |
+| Falha temporária persistente | 1 | 2 | 0 | `erro_ferramenta` | `[1000]` |
+| Erro definitivo | 1 | 1 | 0 | `erro_ferramenta` | `[]` |
+| Carlos e Ana, cada um com retry | 3 | 4 | 2 | `resposta_final` | `[1000, 1000]` |
+
+No cenário de Carlos e Ana, Carlos retorna `horarios: []` e Ana retorna
+`horarios: ["09:00", "14:00"]`. Cada consulta possui duas tentativas
+próprias. O teste verifica o histórico completo, incluindo nome da
+ferramenta, argumentos e resultado.
+
+Chamada ao modelo, solicitação de ferramenta e tentativa de execução são
+contagens diferentes. Lista vazia é um resultado válido, enquanto tentativas
+que falham não são registradas como resultados bem-sucedidos.
+`limite_atingido` refere-se ao limite de chamadas ao modelo; `erro_ferramenta`
+pode indicar erro definitivo ou esgotamento das tentativas.
+
+A espera ocorre somente antes de uma nova tentativa permitida. A espera
+simulada registra o tempo solicitado e quando foi chamada, mas não mede a
+passagem real de tempo. Esses testes verificam a coordenação do harness com
+dependências simuladas, não o comportamento de um modelo real nem a
+disponibilidade de APIs.
+
+Os testes e o typecheck são executados pelos scripts `test` e `typecheck` do
+`package.json`. A validação relatada pelo usuário foi realizada com Node Linux
+no WSL, carregado via `nvm`, e com as dependências instaladas nesse mesmo
+ambiente. Mantenha Node, npm e `node_modules` no mesmo ambiente; misturar
+executáveis Windows com dependências Linux pode impedir a execução de `tsx`,
+`tsc` e binários nativos.
+
+O usuário relatou typecheck aprovado, seis testes executados, seis aprovados,
+zero falhas e nenhuma API externa chamada. Esse é um registro relatado, não
+uma nova execução desta atualização.
+
+O próximo estudo será avaliar o comportamento do modelo (evals), ainda não
+implementado.
+
 ## Harness com modelo real
 
 O arquivo `src/harness-groq.ts` substitui `simularModelo` por chamadas reais
@@ -245,6 +299,7 @@ Na pasta `03-harness`:
 ```bash
 npm install
 npm run typecheck
+npm test
 npm start
 ```
 
@@ -288,7 +343,3 @@ não foi implementada neste estudo.
 Essa etapa local não deve ser confundida com a integração Groq + MCP já
 construída em `02-mcp`. As falhas artificiais deste exercício também não
 representam falhas da ferramenta real.
-
-O arquivo temporário `src/tempCodeRunnerFile.ts` existe no projeto, mas não é
-usado pelo comando `npm start`; o cenário documentado corresponde ao arquivo
-ativo `src/harness-simulado.ts`.

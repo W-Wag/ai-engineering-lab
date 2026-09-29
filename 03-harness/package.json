@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "start": "tsx src/harness-simulado.ts",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "tsx --test \"src/test/**/*.test.ts\""
   },
   "devDependencies": {
     "@types/node": "^26.6.2",
