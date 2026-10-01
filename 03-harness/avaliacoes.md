@@ -380,3 +380,44 @@ As quatro aprovações selecionadas não demonstram consistência estatística. 
 Os arquivos em `resultados-avaliacoes/` são locais e ignorados pelo Git. Este resumo versionado registra os dados essenciais e não depende apenas de links para esses arquivos.
 
 Síntese: Ana sem data fez uma chamada sem ferramenta e pediu a data; Carlos recebeu `carlos` e `2026-10-20`, retornou `horarios: []` e teve resposta compatível; Ana recebeu os horários `09:00` e `14:00`; e o caso de reserva informou que reservas não são suportadas, oferecendo somente uma consulta.
+
+## Experimento de repetição — Ana sem data — 01/10/2026
+
+### Protocolo
+
+O protocolo definido antes da execução estabeleceu três execuções do mesmo
+caso, cada uma com histórico novo, a mesma entrada, instruções e configuração,
+além de avaliação individual. O conjunto seria aprovado somente se as três
+execuções passassem nos critérios automáticos e na revisão textual. Uma falha
+de API seria registrada como não avaliada, sem repetição silenciosa para
+substituí-la.
+
+Esse protocolo é uma intenção anterior à coleta. Os JSONs confirmam entrada,
+chamadas, respostas e classificações, mas não armazenam a configuração
+completa nem o histórico enviado; portanto, não comprovam isoladamente que
+esses elementos permaneceram idênticos.
+
+### Resultados
+
+| Arquivo de evidência | Timestamp UTC | Chamadas ao modelo | Ferramentas solicitadas | Classificação automática | Revisão textual | Classificação do caso |
+| --- | --- | ---: | ---: | --- | --- | --- |
+| `ana-sem-data-2026-10-01T14-15-47-546Z-5f940403-8e0c-406a-aa00-c60a21b672f0.json` | 2026-10-01 14:15:47.543 UTC | 1 | 0 | aprovado | aprovado | aprovado |
+| `ana-sem-data-2026-10-01T14-15-50-644Z-2f9430d4-1244-49e3-8e44-1c8be17479ad.json` | 2026-10-01 14:15:50.642 UTC | 1 | 0 | aprovado | aprovado | aprovado |
+| `ana-sem-data-2026-10-01T14-15-58-018Z-2068fb9a-2227-48a3-8734-97eaf32efbbd.json` | 2026-10-01 14:15:58.016 UTC | 1 | 0 | aprovado | aprovado | aprovado |
+
+Resultado do experimento: três aprovações, zero reprovações e zero falhas de
+execução. O critério do conjunto foi atendido. A redação variou entre as três
+respostas, mas o comportamento observado permaneceu adequado: todas pediram a
+data sem inventar data ou horários e sem solicitar novamente o identificador.
+
+As revisões foram feitas pelo assistente e registradas a pedido do usuário;
+não foram produzidas automaticamente pelo executor. A aprovação em três
+execuções não demonstra confiabilidade geral nem garante o mesmo comportamento
+em execuções futuras. A falha anterior de Ana sem data, em que o modelo
+inventou `2024-10-01` e chamou a ferramenta, continua válida e documentada.
+
+Os arquivos de evidência são locais e ignorados pelo Git. Este resumo registra
+os dados essenciais da rodada e não depende apenas desses arquivos locais.
+
+Esta rodada encerra a etapa introdutória de avaliações. O próximo estudo
+planejado é contexto e continuidade de conversas, ainda não implementado.
