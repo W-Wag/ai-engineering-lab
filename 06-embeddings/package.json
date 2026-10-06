@@ -1,0 +1,21 @@
+{
+  "name": "estudo-06-embeddings",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "tsx src/exercicio.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.2",
+    "tsx": "^4.0.0",
+    "typescript": "^6.0.0"
+  },
+  "dependencies": {
+    "@huggingface/transformers": "^4.3.1"
+  },
+  "allowScripts": {
+    "esbuild@0.28.2": true
+  }
+}
