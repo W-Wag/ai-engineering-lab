@@ -17,7 +17,9 @@ O exercício não usa API, embeddings nem banco de dados.
 - `documentos/manual-atendimento.md`: documento fictício do exercício.
 - `src/documento.ts`: `lerDocumento(nome)`, que devolve `{ fonte, conteudo }`,
   e os tipos `Documento` e `Trecho`.
-- `src/exercicio.ts`: divisão do documento em trechos e exibição do resultado.
+- `src/dividir.ts`: `dividirPorSecoes(documento)`, com a divisão do documento
+  em trechos.
+- `src/exercicio.ts`: execução da divisão e exibição do resultado.
 
 ```ts
 type Trecho = {
@@ -33,7 +35,9 @@ seguido de seções `## ` curtas. Não é um parser Markdown completo.
 
 ## Funcionamento implementado
 
-Toda a divisão está em `src/exercicio.ts`:
+Toda a divisão está em `dividirPorSecoes`, em `src/dividir.ts`. A lógica foi
+escrita no exercício e depois movida, sem alterações, para ser reutilizada
+pelo módulo 08:
 
 1. `lerDocumento("manual-atendimento.md")` lê o arquivo.
 2. O conteúdo é dividido em linhas com `split("\n")`.
