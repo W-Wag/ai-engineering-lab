@@ -22,7 +22,9 @@ Regra didática deste exercício: clientes só podem agendar para si mesmos.
 - `src/dados.ts`: sessão, confirmação e solicitação inicial, todas fictícias.
 - `src/gravacao.ts`: gravação simulada em memória.
 - `src/formato.ts`: validação básica de formato.
-- `src/exercicio.ts`: `executarAgendamento`, com as verificações, e a
+- `src/verificacoes.ts`: `verificarSolicitacao`, com as verificações
+  anteriores à gravação.
+- `src/exercicio.ts`: `executarAgendamento`, que usa as verificações, e a
   exibição do resultado.
 
 ### Dados confiáveis e entrada a verificar
@@ -75,7 +77,10 @@ type ResultadoExecucao =
   | { executado: false; motivo: string };
 ```
 
-As verificações acontecem nesta ordem:
+As verificações estão em `verificarSolicitacao`, em `src/verificacoes.ts`,
+que devolve o motivo do primeiro bloqueio ou `undefined`. A lógica foi escrita
+no exercício e depois movida, sem alterações, para ser reutilizada pelo
+módulo 10. As verificações acontecem nesta ordem:
 
 1. Formato: a solicitação passa por `verificarFormato`.
 2. Identidade e permissão: o cliente da solicitação corresponde ao usuário
