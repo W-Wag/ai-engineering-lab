@@ -71,7 +71,10 @@ export default function App() {
     const resultado = await enviarMensagem(conversaId, novaMensagem.texto)
 
     if (resultado.ok) {
-      const respostaDoAssistente: MensagemExibida = {id: crypto.randomUUID(), autor: "assistente", texto: resultado.dados.resposta}
+      // TODO 7 (bloco 2): guarde resultado.dados.fontesConsultadas junto a
+      // esta resposta do assistente, no campo fontesConsultadas da própria
+      // mensagem. Não use uma lista global de fontes.
+      const respostaDoAssistente: MensagemExibida = {id: crypto.randomUUID(), autor: "assistente", texto: resultado.dados.resposta, fontesConsultadas: resultado.dados.fontesConsultadas}
       setMensagens(anteriores => [...anteriores, respostaDoAssistente])
     } else {
       setErro(resultado.erro.mensagem)
@@ -86,7 +89,7 @@ export default function App() {
     <main className="chat">
       <header className="chat__cabecalho">
         <h1>Assistente de agenda</h1>
-        <p>Consulta de horários disponíveis. Dados fictícios.</p>
+        <p>Consulta de horários e políticas de atendimento. Dados fictícios.</p>
       </header>
 
       <ListaMensagens mensagens={mensagens} />

@@ -1,8 +1,5 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import {
-  consultarDisponibilidade,
-} from "../../../../03-harness/src/disponibilidade.js";
 import { construirApp } from "../app.js";
 import {
   RepositorioDeConversas,
@@ -10,7 +7,8 @@ import {
   type ProcessadorDeRodada,
 } from "../conversas.js";
 
-// HTTP real (app.inject) com processamento simulado: nenhuma chamada à Groq.
+// Bloco 1. HTTP real (app.inject) com processamento simulado: nenhuma chamada
+// à Groq.
 
 const SYSTEM = "instruções de teste";
 
@@ -18,9 +16,12 @@ function app(processarRodada: ProcessadorDeRodada) {
   return construirApp({ processarRodada, instrucoesSystem: SYSTEM });
 }
 
+/** Rodada sem ferramentas: só mensagens, nenhuma fonte. */
+const so = (mensagens: Mensagem[]) => ({ mensagens, fontes: [] });
+
 const responderTexto =
   (texto: string): ProcessadorDeRodada =>
-  async () => [{ role: "assistant", content: texto }];
+  async () => so([{ role: "assistant", content: texto }]);
 
 async function criarConversa(a: ReturnType<typeof app>): Promise<string> {
   const r = await a.inject({ method: "POST", url: "/conversas" });
@@ -36,13 +37,13 @@ function enviar(a: ReturnType<typeof app>, conversaId: string, corpo: unknown) {
   });
 }
 
-test("cria conversa e responde", async (t) => {
+test("cria conversa e responde, sem fontes quando não há busca", async (t) => {
   const a = app(responderTexto("olá"));
   t.after(() => a.close());
   const id = await criarConversa(a);
   const r = await enviar(a, id, { texto: "oi" });
   assert.equal(r.statusCode, 200);
-  assert.deepEqual(r.json(), { resposta: "olá" });
+  assert.deepEqual(r.json(), { resposta: "olá", fontesConsultadas: [] });
 });
 
 test("valida texto e conversa", async (t) => {
@@ -70,56 +71,21 @@ test("valida texto e conversa", async (t) => {
   assert.equal(inexistente.json().erro.codigo, "CONVERSA_NAO_ENCONTRADA");
 });
 
-test("cenário de construção com ferramenta, simulado", async () => {
-  // Imita o modelo: pede a data; com a data, chama a ferramenta; com o
-  // resultado, responde. A ferramenta é a consulta real do módulo 03.
-  const simulado: ProcessadorDeRodada = async (mensagens) => {
-    const ultima = mensagens.at(-1)!;
-    if (ultima.role === "tool") {
-      const { horarios } = JSON.parse(String(ultima.content));
-      return [{ role: "assistant", content: `Horários: ${horarios.join(", ")}` }];
-    }
-    if (String(ultima.content).includes("2026")) {
-      const consulta = { profissionalId: "ana", data: "2026-10-20" };
-      return [
-        {
-          role: "assistant",
-          content: null,
-          tool_calls: [
-            {
-              id: "c1",
-              type: "function",
-              function: { name: "consultarDisponibilidade", arguments: JSON.stringify(consulta) },
-            },
-          ],
-        },
-        { role: "tool", tool_call_id: "c1", content: JSON.stringify(consultarDisponibilidade(consulta)) },
-      ];
-    }
-    return [{ role: "assistant", content: "Para qual data?" }];
-  };
-
-  const repo = new RepositorioDeConversas(simulado, SYSTEM);
-  const id = repo.criarConversa();
-  assert.equal(await repo.enviarMensagem(id, "Quais horários a Ana tem?"), "Para qual data?");
-  assert.equal(await repo.enviarMensagem(id, "20 de outubro de 2026."), "Horários: 09:00, 14:00");
-  assert.deepEqual(
-    repo.historico(id).map((m: Mensagem) => m.role),
-    ["system", "user", "assistant", "user", "assistant", "tool", "assistant"],
-  );
-});
-
 test("conversas isoladas", async () => {
-  const contarUsuario: ProcessadorDeRodada = async (mensagens) => [
-    { role: "assistant", content: String(mensagens.filter((m) => m.role === "user").length) },
-  ];
+  const contarUsuario: ProcessadorDeRodada = async (mensagens) =>
+    so([
+      {
+        role: "assistant",
+        content: String(mensagens.filter((m) => m.role === "user").length),
+      },
+    ]);
   const repo = new RepositorioDeConversas(contarUsuario, SYSTEM);
   const a = repo.criarConversa();
   const b = repo.criarConversa();
   assert.notEqual(a, b);
-  assert.equal(await repo.enviarMensagem(a, "1"), "1");
-  assert.equal(await repo.enviarMensagem(a, "2"), "2");
-  assert.equal(await repo.enviarMensagem(b, "1"), "1");
+  assert.equal((await repo.enviarMensagem(a, "1")).resposta, "1");
+  assert.equal((await repo.enviarMensagem(a, "2")).resposta, "2");
+  assert.equal((await repo.enviarMensagem(b, "1")).resposta, "1");
   assert.equal(repo.historico(b).length, 3);
 });
 
@@ -129,7 +95,7 @@ test("trava por conversa e liberação após falha", async (t) => {
   const controlado: ProcessadorDeRodada = async () => {
     if (modo === "esperar") await new Promise<void>((r) => (liberar = r));
     if (modo === "falhar") throw new Error("segredo interno 123");
-    return [{ role: "assistant", content: "ok" }];
+    return so([{ role: "assistant", content: "ok" }]);
   };
   const a = app(controlado);
   t.after(() => a.close());
@@ -166,7 +132,7 @@ test("falha não altera histórico", async () => {
   let falhar = true;
   const repo = new RepositorioDeConversas(async () => {
     if (falhar) throw new Error("x");
-    return [{ role: "assistant", content: "ok" }];
+    return so([{ role: "assistant", content: "ok" }]);
   }, SYSTEM);
   const id = repo.criarConversa();
   await assert.rejects(() => repo.enviarMensagem(id, "a"));
@@ -178,8 +144,8 @@ test("falha não altera histórico", async () => {
 
 test("resposta ausente não é sucesso", async (t) => {
   const vazio = app(responderTexto("  "));
-  const nada = app(async () => []);
-  const ciclo = app(async () => [{ role: "tool", tool_call_id: "x", content: "{}" }]);
+  const nada = app(async () => so([]));
+  const ciclo = app(async () => so([{ role: "tool", tool_call_id: "x", content: "{}" }]));
   t.after(() => Promise.all([vazio.close(), nada.close(), ciclo.close()]));
 
   for (const [a, codigo] of [

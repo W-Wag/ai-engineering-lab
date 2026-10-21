@@ -129,3 +129,22 @@
   outline: 2px solid var(--destaque);
   outline-offset: 2px;
 }
+
+.fontes {
+  margin-top: 8px;
+  padding-top: 6px;
+  border-top: 1px solid var(--borda);
+  font-size: 0.85rem;
+  color: var(--texto-suave);
+}
+
+.fontes__titulo {
+  margin: 0;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.fontes__lista {
+  margin: 2px 0 0;
+  padding-left: 18px;
+}

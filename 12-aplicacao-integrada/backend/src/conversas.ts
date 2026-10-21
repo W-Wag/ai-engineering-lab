@@ -1,16 +1,44 @@
+import type Groq from "groq-sdk";
 import { randomUUID } from "node:crypto";
-import type { Mensagem } from "../../../04-contexto/src/processar-rodada.js";
 
-export type { Mensagem };
+export type Mensagem = Groq.Chat.ChatCompletionMessageParam;
+
+/** Fonte de um trecho devolvido por consultarPoliticas. */
+export type FonteConsultada = {
+  fonte: string;
+  secao: string;
+};
+
+/** Mensagens novas de uma rodada e as fontes trazidas por ferramentas nela. */
+export type ResultadoRodada = {
+  mensagens: Mensagem[];
+  fontes: FonteConsultada[];
+};
 
 /**
  * Uma rodada: recebe o histórico e devolve as mensagens novas (assistente e,
- * se houver, resultados de ferramentas). Em execução real é o processarRodada
- * do módulo 04; nas verificações, uma simulação sem rede.
+ * se houver, resultados de ferramentas). Em execução real é o processador de
+ * rodada.ts com a Groq; nas verificações, uma simulação sem rede.
  */
 export type ProcessadorDeRodada = (
   mensagens: readonly Mensagem[],
-) => Promise<Mensagem[]>;
+) => Promise<ResultadoRodada>;
+
+export type RespostaDaMensagem = {
+  resposta: string;
+  /** Fontes recuperadas durante esta mensagem, sem repetições. */
+  fontesConsultadas: FonteConsultada[];
+};
+
+function semRepeticoes(fontes: FonteConsultada[]): FonteConsultada[] {
+  const vistas = new Set<string>();
+  return fontes.filter(({ fonte, secao }) => {
+    const chave = JSON.stringify([fonte, secao]);
+    if (vistas.has(chave)) return false;
+    vistas.add(chave);
+    return true;
+  });
+}
 
 /** Falha conhecida, com código e mensagem que podem ir ao navegador. */
 export class ErroDeConversa extends Error {
@@ -65,15 +93,21 @@ export class RepositorioDeConversas {
   }
 
   /**
-   * Processa uma mensagem do usuário e devolve o texto final do assistente.
+   * Processa uma mensagem do usuário e devolve o texto final do assistente
+   * com as fontes recuperadas durante esta mensagem.
    *
    * - Uma mensagem por vez em cada conversa: outra chamada para a mesma
    *   conversa, enquanto esta estiver em andamento, falha com
    *   CONVERSA_OCUPADA. A trava é liberada também em caso de erro.
    * - O histórico só é atualizado quando há resposta final. Em caso de falha,
    *   a conversa continua como estava antes da mensagem.
+   * - As fontes vêm dos resultados das ferramentas, não do texto do modelo,
+   *   e começam vazias a cada mensagem.
    */
-  async enviarMensagem(conversaId: string, texto: string): Promise<string> {
+  async enviarMensagem(
+    conversaId: string,
+    texto: string,
+  ): Promise<RespostaDaMensagem> {
     const historico = this.historicos.get(conversaId);
     if (historico === undefined) {
       throw new ErroDeConversa(
@@ -95,10 +129,13 @@ export class RepositorioDeConversas {
         ...historico,
         { role: "user", content: texto },
       ];
+      const fontes: FonteConsultada[] = [];
 
       for (let rodada = 0; rodada < LIMITE_DE_RODADAS; rodada++) {
-        const novas = await this.processarRodada(trabalho);
+        const { mensagens: novas, fontes: daRodada } =
+          await this.processarRodada(trabalho);
         trabalho.push(...novas);
+        fontes.push(...daRodada);
 
         const ultima = novas.at(-1);
         if (ultima === undefined) {
@@ -116,7 +153,10 @@ export class RepositorioDeConversas {
           ultima.content.trim() !== ""
         ) {
           this.historicos.set(conversaId, trabalho);
-          return ultima.content;
+          return {
+            resposta: ultima.content,
+            fontesConsultadas: semRepeticoes(fontes),
+          };
         }
 
         throw new ErroDeConversa(

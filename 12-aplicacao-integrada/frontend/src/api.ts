@@ -89,18 +89,42 @@ export function criarConversa(): Promise<ResultadoApi<{ conversaId: string }>> {
   return postar('/conversas', {}, temTexto('conversaId'));
 }
 
+/** Fonte e seção de um trecho recuperado pelo backend nesta mensagem. */
+export type FonteConsultada = {
+  fonte: string
+  secao: string
+}
+
+export type RespostaDaMensagem = {
+  resposta: string
+  /** Trechos recuperados ao processar esta mensagem; [] sem busca. */
+  fontesConsultadas: FonteConsultada[]
+}
+
+function eFonteConsultada(valor: unknown): valor is FonteConsultada {
+  if (typeof valor !== 'object' || valor === null) return false
+  const objeto = valor as Record<string, unknown>
+  return typeof objeto.fonte === 'string' && typeof objeto.secao === 'string'
+}
+
+function eRespostaDaMensagem(valor: unknown): valor is RespostaDaMensagem {
+  if (!temTexto('resposta')(valor)) return false
+  const fontes = (valor as Record<string, unknown>).fontesConsultadas
+  return Array.isArray(fontes) && fontes.every(eFonteConsultada)
+}
+
 /**
- * POST /conversas/:conversaId/mensagens → { resposta }.
+ * POST /conversas/:conversaId/mensagens → { resposta, fontesConsultadas }.
  * Cada chamada bem-sucedida até o backend consome a API da Groq.
  * Não tenta de novo em caso de falha.
  */
 export function enviarMensagem(
   conversaId: string,
   texto: string,
-): Promise<ResultadoApi<{ resposta: string }>> {
+): Promise<ResultadoApi<RespostaDaMensagem>> {
   return postar(
     `/conversas/${encodeURIComponent(conversaId)}/mensagens`,
     { texto },
-    temTexto('resposta'),
+    eRespostaDaMensagem,
   );
 }

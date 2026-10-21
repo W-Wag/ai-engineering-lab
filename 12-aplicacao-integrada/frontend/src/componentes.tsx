@@ -1,4 +1,5 @@
 import type { FormEvent } from 'react'
+import type { FonteConsultada } from './api.ts'
 
 // Componentes só de apresentação: recebem dados e callbacks por props e não
 // guardam estado nem chamam o backend.
@@ -7,6 +8,28 @@ export type MensagemExibida = {
   id: string
   autor: 'usuario' | 'assistente'
   texto: string
+  /** Fontes recuperadas para esta resposta do assistente. */
+  fontesConsultadas?: FonteConsultada[]
+}
+
+/**
+ * Fontes recuperadas pelo backend ao processar uma mensagem. Mostra o que foi
+ * consultado; não garante que cada afirmação da resposta esteja sustentada
+ * por essas fontes. Os arquivos não existem no navegador: só texto, sem links.
+ */
+export function FontesConsultadas({ fontes }: { fontes: FonteConsultada[] }) {
+  return (
+    <section className="fontes" aria-label="Fontes consultadas">
+      <h2 className="fontes__titulo">Fontes consultadas</h2>
+      <ul className="fontes__lista">
+        {fontes.map(({ fonte, secao }) => (
+          <li key={`${fonte}\u0000${secao}`}>
+            {fonte} — seção {secao}
+          </li>
+        ))}
+      </ul>
+    </section>
+  )
 }
 
 export function ListaMensagens({ mensagens }: { mensagens: MensagemExibida[] }) {
@@ -21,6 +44,13 @@ export function ListaMensagens({ mensagens }: { mensagens: MensagemExibida[] }) 
             {mensagem.autor === 'usuario' ? 'Você' : 'Assistente'}
           </span>
           <p className="mensagem__texto">{mensagem.texto}</p>
+          {/* TODO 8: passe ao componente FontesConsultadas as fontes desta
+              mensagem (não de outra resposta).
+              TODO 8.1: exiba a área somente quando a lista existir e não
+              estiver vazia. */}
+              {mensagem.fontesConsultadas && mensagem.fontesConsultadas.length > 0 && (
+                <FontesConsultadas fontes={mensagem.fontesConsultadas} />
+              )}
         </li>
       ))}
     </ol>

@@ -81,12 +81,9 @@ export function construirApp(opcoes: OpcoesDoApp): FastifyInstance {
           .send(erro("TEXTO_INVALIDO", "Informe um texto não vazio."));
       }
 
-      const resposta = await conversas.enviarMensagem(
-        request.params.conversaId,
-        texto.trim(),
-      );
-
-      return { resposta };
+      // { resposta, fontesConsultadas }: só fonte e seção dos trechos
+      // recuperados nesta mensagem; [] quando não houve busca.
+      return conversas.enviarMensagem(request.params.conversaId, texto.trim());
     },
   );
 
