@@ -4,7 +4,13 @@ import {
   consultarDisponibilidade,
   eConsultaValida,
 } from "../../../03-harness/src/disponibilidade.js";
+import type { SessaoAutenticada } from "../../../09-acoes-seguras/src/tipos.js";
 import { criarFerramentas } from "../../../04-contexto/src/processar-rodada.js";
+import {
+  eArgumentosDaProposta,
+  type PropostaExibida,
+  type ServicoDeAgendamentos,
+} from "./agendamentos.js";
 import type { FonteConsultada, Mensagem } from "./conversas.js";
 import type { ResultadoPoliticas } from "./politicas.js";
 
@@ -12,14 +18,28 @@ export type BuscadorDePoliticas = (
   consulta: string,
 ) => Promise<ResultadoPoliticas>;
 
-/** Mensagem de ferramenta para o histórico e as fontes que ela trouxe. */
-export type ResultadoDaFerramenta = {
-  mensagem: Mensagem;
-  fontes: FonteConsultada[];
+/** Dependências e contexto disponíveis às ferramentas numa rodada. */
+export type ContextoDasFerramentas = {
+  buscarPoliticas: BuscadorDePoliticas;
+  agendamentos: ServicoDeAgendamentos;
+  sessao: SessaoAutenticada;
+  conversaId: string;
 };
 
 /**
- * consultarDisponibilidade, como no módulo 04, mais consultarPoliticas.
+ * Mensagem de ferramenta para o histórico e o que ela produziu para a
+ * interface: fontes recuperadas e propostas preparadas.
+ */
+export type ResultadoDaFerramenta = {
+  mensagem: Mensagem;
+  fontes: FonteConsultada[];
+  propostas: PropostaExibida[];
+};
+
+/**
+ * consultarDisponibilidade, como no módulo 04, consultarPoliticas e
+ * prepararPropostaAgendamento. Não há ferramenta de confirmação nem de criação
+ * direta: o agendamento só é criado pelo botão da interface.
  */
 export function criarDefinicoesDeFerramentas(): Groq.Chat.ChatCompletionTool[] {
   return [
@@ -40,6 +60,27 @@ export function criarDefinicoesDeFerramentas(): Groq.Chat.ChatCompletionTool[] {
             },
           },
           required: ["consulta"],
+          additionalProperties: false,
+        },
+      },
+    },
+    {
+      type: "function",
+      function: {
+        name: "prepararPropostaAgendamento",
+        description:
+          "Prepara uma proposta de agendamento para o usuário atual com um profissional, data e horário disponíveis. Não cria o agendamento: ele só é criado quando o usuário confirmar pelo botão na interface.",
+        parameters: {
+          type: "object",
+          properties: {
+            profissionalId: {
+              type: "string",
+              description: "Identificador do profissional",
+            },
+            data: { type: "string", description: "Data no formato YYYY-MM-DD" },
+            horario: { type: "string", description: "Horário no formato HH:MM" },
+          },
+          required: ["profissionalId", "data", "horario"],
           additionalProperties: false,
         },
       },
@@ -65,7 +106,7 @@ export function eConsultaPoliticasValida(
  */
 export async function executarChamada(
   chamada: Groq.Chat.ChatCompletionMessageToolCall,
-  buscarPoliticas: BuscadorDePoliticas,
+  contexto: ContextoDasFerramentas,
 ): Promise<ResultadoDaFerramenta> {
   let argumentos: unknown;
   try {
@@ -74,13 +115,17 @@ export async function executarChamada(
     throw new Error("Argumentos inválidos: JSON malformado.");
   }
 
-  const responder = (conteudo: unknown, fontes: FonteConsultada[]) => ({
+  const responder = (
+    conteudo: unknown,
+    produzido: { fontes?: FonteConsultada[]; propostas?: PropostaExibida[] } = {},
+  ): ResultadoDaFerramenta => ({
     mensagem: {
-      role: "tool" as const,
+      role: "tool",
       tool_call_id: chamada.id,
       content: JSON.stringify(conteudo),
     },
-    fontes,
+    fontes: produzido.fontes ?? [],
+    propostas: produzido.propostas ?? [],
   });
 
   switch (chamada.function.name) {
@@ -88,7 +133,7 @@ export async function executarChamada(
       if (!eConsultaValida(argumentos)) {
         throw new Error("Argumentos inválidos para consultarDisponibilidade.");
       }
-      return responder(consultarDisponibilidade(argumentos), []);
+      return responder(consultarDisponibilidade(argumentos));
     }
 
     case "consultarPoliticas": {
@@ -96,9 +141,9 @@ export async function executarChamada(
         throw new Error("Argumentos inválidos para consultarPoliticas.");
       }
 
-      const resultado = await buscarPoliticas(argumentos.consulta.trim());
+      const resultado = await contexto.buscarPoliticas(argumentos.consulta.trim());
       if (!resultado.encontrado) {
-        return responder({ tipo: "conteudo_de_referencia", encontrado: false }, []);
+        return responder({ tipo: "conteudo_de_referencia", encontrado: false });
       }
 
       // Só o nome do arquivo, nunca um caminho.
@@ -110,7 +155,35 @@ export async function executarChamada(
 
       return responder(
         { tipo: "conteudo_de_referencia", encontrado: true, trecho },
-        [{ fonte: trecho.fonte, secao: trecho.secao }],
+        { fontes: [{ fonte: trecho.fonte, secao: trecho.secao }] },
+      );
+    }
+
+    case "prepararPropostaAgendamento": {
+      if (!eArgumentosDaProposta(argumentos)) {
+        throw new Error("Argumentos inválidos para prepararPropostaAgendamento.");
+      }
+
+      const resultado = contexto.agendamentos.preparar(
+        contexto.sessao,
+        contexto.conversaId,
+        argumentos,
+      );
+
+      if (!resultado.preparada) {
+        // Dados inválidos ou horário indisponível: o modelo é informado e
+        // nenhuma proposta chega à interface.
+        return responder({ tipo: "proposta_nao_preparada", motivo: resultado.motivo });
+      }
+
+      return responder(
+        {
+          tipo: "proposta_preparada",
+          ...resultado.proposta,
+          aviso:
+            "O agendamento ainda não foi criado. Ele só é criado quando o usuário confirmar pelo botão na interface.",
+        },
+        { propostas: [resultado.proposta] },
       );
     }
 

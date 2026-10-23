@@ -17,7 +17,7 @@ function app(processarRodada: ProcessadorDeRodada) {
 }
 
 /** Rodada sem ferramentas: só mensagens, nenhuma fonte. */
-const so = (mensagens: Mensagem[]) => ({ mensagens, fontes: [] });
+const so = (mensagens: Mensagem[]) => ({ mensagens, fontes: [], propostas: [] });
 
 const responderTexto =
   (texto: string): ProcessadorDeRodada =>
@@ -43,7 +43,7 @@ test("cria conversa e responde, sem fontes quando não há busca", async (t) => 
   const id = await criarConversa(a);
   const r = await enviar(a, id, { texto: "oi" });
   assert.equal(r.statusCode, 200);
-  assert.deepEqual(r.json(), { resposta: "olá", fontesConsultadas: [] });
+  assert.deepEqual(r.json(), { resposta: "olá", fontesConsultadas: [], propostas: [] });
 });
 
 test("valida texto e conversa", async (t) => {

@@ -1,4 +1,10 @@
 import Fastify, { type FastifyInstance, type FastifyServerOptions } from "fastify";
+import type { SessaoAutenticada } from "../../../09-acoes-seguras/src/tipos.js";
+import {
+  ErroDeConfirmacao,
+  SESSAO_FICTICIA,
+  ServicoDeAgendamentos,
+} from "./agendamentos.js";
 import {
   ErroDeConversa,
   RepositorioDeConversas,
@@ -21,9 +27,19 @@ function erro(codigo: string, mensagem: string): RespostaDeErro {
   return { erro: { codigo, mensagem } };
 }
 
+const STATUS_DA_CONFIRMACAO: Record<ErroDeConfirmacao["codigo"], number> = {
+  PROPOSTA_NAO_ENCONTRADA: 404,
+  HORARIO_INDISPONIVEL: 409,
+  CONFIRMACAO_BLOQUEADA: 403,
+};
+
 export type OpcoesDoApp = {
   processarRodada: ProcessadorDeRodada;
   instrucoesSystem: string;
+  /** O mesmo serviço usado pela ferramenta de propostas do processador. */
+  agendamentos?: ServicoDeAgendamentos;
+  /** Sessão simulada; não é autenticação real. */
+  sessao?: SessaoAutenticada;
   fastify?: FastifyServerOptions;
 };
 
@@ -37,6 +53,8 @@ export function construirApp(opcoes: OpcoesDoApp): FastifyInstance {
     opcoes.processarRodada,
     opcoes.instrucoesSystem,
   );
+  const agendamentos = opcoes.agendamentos ?? new ServicoDeAgendamentos();
+  const sessao = opcoes.sessao ?? SESSAO_FICTICIA;
 
   // Qualquer falha não prevista vira uma resposta genérica: detalhes, stack e
   // mensagens de bibliotecas ficam só no log do servidor.
@@ -44,6 +62,12 @@ export function construirApp(opcoes: OpcoesDoApp): FastifyInstance {
     if (falha instanceof ErroDeConversa) {
       return reply
         .status(STATUS_POR_CODIGO[falha.codigo])
+        .send(erro(falha.codigo, falha.message));
+    }
+
+    if (falha instanceof ErroDeConfirmacao) {
+      return reply
+        .status(STATUS_DA_CONFIRMACAO[falha.codigo])
         .send(erro(falha.codigo, falha.message));
     }
 
@@ -81,9 +105,30 @@ export function construirApp(opcoes: OpcoesDoApp): FastifyInstance {
           .send(erro("TEXTO_INVALIDO", "Informe um texto não vazio."));
       }
 
-      // { resposta, fontesConsultadas }: só fonte e seção dos trechos
-      // recuperados nesta mensagem; [] quando não houve busca.
+      // { resposta, fontesConsultadas, propostas }: só o que foi recuperado
+      // e preparado nesta mensagem; listas vazias quando nada ocorreu.
       return conversas.enviarMensagem(request.params.conversaId, texto.trim());
+    },
+  );
+
+  // Confirmação pelo botão. O corpo é ignorado: cliente, data e horário vêm
+  // da proposta guardada no backend, nunca da requisição. Não chama a Groq.
+  app.post<{ Params: { conversaId: string; propostaId: string } }>(
+    "/conversas/:conversaId/propostas/:propostaId/confirmar",
+    async (request) => {
+      const { conversaId, propostaId } = request.params;
+
+      return conversas.executarAcaoDaAplicacao(conversaId, () => {
+        const resultado = agendamentos.confirmar(sessao, conversaId, propostaId);
+        const { id, profissional, data, horario } = resultado.agendamento;
+        return {
+          resultado,
+          registro:
+            resultado.resultado === "criado"
+              ? `o usuário confirmou pelo botão a proposta ${propostaId}, e o agendamento ${id} foi criado (${profissional}, ${data}, ${horario}).`
+              : undefined,
+        };
+      });
     },
   );
 

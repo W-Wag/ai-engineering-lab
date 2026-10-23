@@ -95,26 +95,59 @@ export type FonteConsultada = {
   secao: string
 }
 
+/**
+ * Proposta de agendamento preparada pelo backend nesta mensagem. Ainda não é
+ * um agendamento: só vira um depois da confirmação pelo botão.
+ */
+export type PropostaExibida = {
+  propostaId: string
+  profissional: string
+  data: string
+  horario: string
+  estado: 'aguardando_confirmacao'
+}
+
 export type RespostaDaMensagem = {
   resposta: string
   /** Trechos recuperados ao processar esta mensagem; [] sem busca. */
   fontesConsultadas: FonteConsultada[]
+  /** Propostas preparadas ao processar esta mensagem; [] sem proposta. */
+  propostas: PropostaExibida[]
+}
+
+function eObjeto(valor: unknown): valor is Record<string, unknown> {
+  return typeof valor === 'object' && valor !== null && !Array.isArray(valor)
 }
 
 function eFonteConsultada(valor: unknown): valor is FonteConsultada {
-  if (typeof valor !== 'object' || valor === null) return false
-  const objeto = valor as Record<string, unknown>
-  return typeof objeto.fonte === 'string' && typeof objeto.secao === 'string'
+  return eObjeto(valor) && typeof valor.fonte === 'string' && typeof valor.secao === 'string'
+}
+
+function ePropostaExibida(valor: unknown): valor is PropostaExibida {
+  return (
+    eObjeto(valor) &&
+    typeof valor.propostaId === 'string' &&
+    valor.propostaId !== '' &&
+    typeof valor.profissional === 'string' &&
+    typeof valor.data === 'string' &&
+    typeof valor.horario === 'string' &&
+    valor.estado === 'aguardando_confirmacao'
+  )
 }
 
 function eRespostaDaMensagem(valor: unknown): valor is RespostaDaMensagem {
   if (!temTexto('resposta')(valor)) return false
-  const fontes = (valor as Record<string, unknown>).fontesConsultadas
-  return Array.isArray(fontes) && fontes.every(eFonteConsultada)
+  const { fontesConsultadas, propostas } = valor as Record<string, unknown>
+  return (
+    Array.isArray(fontesConsultadas) &&
+    fontesConsultadas.every(eFonteConsultada) &&
+    Array.isArray(propostas) &&
+    propostas.every(ePropostaExibida)
+  )
 }
 
 /**
- * POST /conversas/:conversaId/mensagens → { resposta, fontesConsultadas }.
+ * POST /conversas/:conversaId/mensagens → { resposta, fontesConsultadas, propostas }.
  * Cada chamada bem-sucedida até o backend consome a API da Groq.
  * Não tenta de novo em caso de falha.
  */
@@ -127,4 +160,49 @@ export function enviarMensagem(
     { texto },
     eRespostaDaMensagem,
   );
+}
+
+/** Agendamento criado pelo backend, como devolvido pela confirmação. */
+export type AgendamentoConfirmado = {
+  id: number
+  profissional: string
+  data: string
+  horario: string
+}
+
+export type ResultadoDaConfirmacao = {
+  /** "criado" na primeira vez; "reutilizado" quando a proposta já tinha sido confirmada. */
+  resultado: 'criado' | 'reutilizado'
+  agendamento: AgendamentoConfirmado
+}
+
+function eResultadoDaConfirmacao(valor: unknown): valor is ResultadoDaConfirmacao {
+  if (!eObjeto(valor)) return false
+  const { resultado, agendamento } = valor
+  return (
+    (resultado === 'criado' || resultado === 'reutilizado') &&
+    eObjeto(agendamento) &&
+    typeof agendamento.id === 'number' &&
+    typeof agendamento.profissional === 'string' &&
+    typeof agendamento.data === 'string' &&
+    typeof agendamento.horario === 'string'
+  )
+}
+
+/**
+ * POST /conversas/:conversaId/propostas/:propostaId/confirmar.
+ * Envia só os identificadores: cliente, data e horário vêm da proposta
+ * guardada no backend. Não consome a API da Groq.
+ * Chamar de novo com a mesma proposta devolve o mesmo agendamento
+ * ("reutilizado"). Não tenta de novo em caso de falha.
+ */
+export function confirmarProposta(
+  conversaId: string,
+  propostaId: string,
+): Promise<ResultadoApi<ResultadoDaConfirmacao>> {
+  return postar(
+    `/conversas/${encodeURIComponent(conversaId)}/propostas/${encodeURIComponent(propostaId)}/confirmar`,
+    {},
+    eResultadoDaConfirmacao,
+  )
 }

@@ -1,5 +1,9 @@
 import type { FormEvent } from 'react'
-import type { FonteConsultada } from './api.ts'
+import type {
+  FonteConsultada,
+  PropostaExibida,
+  ResultadoDaConfirmacao,
+} from './api.ts'
 
 // Componentes só de apresentação: recebem dados e callbacks por props e não
 // guardam estado nem chamam o backend.
@@ -10,6 +14,87 @@ export type MensagemExibida = {
   texto: string
   /** Fontes recuperadas para esta resposta do assistente. */
   fontesConsultadas?: FonteConsultada[]
+  /** Propostas preparadas para esta resposta do assistente. */
+  propostas?: PropostaExibida[]
+}
+
+/**
+ * Situação da confirmação de uma proposta na interface.
+ * - pendente: ainda não confirmada (ou nunca tentada);
+ * - enviando: aguardando o backend;
+ * - erro: a tentativa falhou; nada foi marcado como sucesso;
+ * - concluida: o backend confirmou e devolveu o agendamento.
+ */
+export type EstadoDaConfirmacao =
+  | { situacao: 'pendente' }
+  | { situacao: 'enviando' }
+  | { situacao: 'erro'; mensagem: string }
+  | { situacao: 'concluida'; confirmacao: ResultadoDaConfirmacao }
+
+type PropsCardProposta = {
+  proposta: PropostaExibida
+  estado: EstadoDaConfirmacao
+  /** Bloqueia o botão por motivo externo ao card (ex.: outro envio em curso). */
+  desabilitado: boolean
+  onConfirmar: () => void
+}
+
+/**
+ * Card de uma proposta. Só apresenta: quem decide o estado é quem usa o card.
+ * O sucesso exibido vem do resultado do backend (estado "concluida"), nunca
+ * do texto do modelo.
+ */
+export function CardProposta({
+  proposta,
+  estado,
+  desabilitado,
+  onConfirmar,
+}: PropsCardProposta) {
+  const tituloId = `proposta-${proposta.propostaId}`
+  const enviando = estado.situacao === 'enviando'
+  const concluida = estado.situacao === 'concluida'
+
+  return (
+    <section className="proposta" aria-labelledby={tituloId}>
+      <h2 className="proposta__titulo" id={tituloId}>
+        Proposta de agendamento
+      </h2>
+      <dl className="proposta__dados">
+        <dt>Profissional</dt>
+        <dd>{proposta.profissional}</dd>
+        <dt>Data</dt>
+        <dd>{proposta.data}</dd>
+        <dt>Horário</dt>
+        <dd>{proposta.horario}</dd>
+      </dl>
+
+      {!concluida && (
+        <button
+          type="button"
+          className="proposta__botao"
+          onClick={onConfirmar}
+          disabled={desabilitado || enviando}
+          aria-describedby={tituloId}
+        >
+          {estado.situacao === 'erro' ? 'Tentar confirmar novamente' : 'Confirmar agendamento'}
+        </button>
+      )}
+
+      <p className="proposta__status" role="status" aria-live="polite">
+        {enviando && 'Confirmando…'}
+        {concluida &&
+          (estado.confirmacao.resultado === 'criado'
+            ? `Agendamento criado (ID ${estado.confirmacao.agendamento.id}).`
+            : `Este agendamento já tinha sido criado (ID ${estado.confirmacao.agendamento.id}).`)}
+      </p>
+
+      {estado.situacao === 'erro' && (
+        <p className="proposta__erro" role="alert">
+          {estado.mensagem}
+        </p>
+      )}
+    </section>
+  )
 }
 
 /**
@@ -32,7 +117,17 @@ export function FontesConsultadas({ fontes }: { fontes: FonteConsultada[] }) {
   )
 }
 
-export function ListaMensagens({ mensagens }: { mensagens: MensagemExibida[] }) {
+type PropsListaMensagens = {
+  mensagens: MensagemExibida[]
+  /** Estado da confirmação de cada proposta, pelo propostaId. */
+  estadosDasPropostas?: Record<string, EstadoDaConfirmacao>
+  /** Chamado com o propostaId quando o botão de um card é clicado. */
+  onConfirmarProposta?: (propostaId: string) => void
+  /** Bloqueio externo dos botões de confirmação. */
+  confirmacaoDesabilitada?: boolean
+}
+
+export function ListaMensagens({ mensagens, confirmacaoDesabilitada, estadosDasPropostas, onConfirmarProposta }: PropsListaMensagens) {
   return (
     <ol className="mensagens" role="log" aria-live="polite" aria-label="Mensagens">
       {mensagens.length === 0 && (
@@ -51,6 +146,15 @@ export function ListaMensagens({ mensagens }: { mensagens: MensagemExibida[] }) 
               {mensagem.fontesConsultadas && mensagem.fontesConsultadas.length > 0 && (
                 <FontesConsultadas fontes={mensagem.fontesConsultadas} />
               )}
+          {/* TODO 10 (bloco 3): renderize um CardProposta para cada proposta
+              desta mensagem, com os dados recebidos do backend.
+              TODO 10.1: passe a cada card o estado da sua proposta (pendente
+              quando ainda não houver), o bloqueio externo e um onConfirmar
+              que chame onConfirmarProposta com o propostaId do card. As
+              props já estão declaradas em PropsListaMensagens. */}
+              {mensagem.propostas && mensagem.propostas.map((proposta) => (
+                <CardProposta key={proposta.propostaId} proposta={proposta} estado={estadosDasPropostas?.[proposta.propostaId] ?? {situacao: 'pendente'}} onConfirmar={() => onConfirmarProposta && onConfirmarProposta(proposta.propostaId)} desabilitado={confirmacaoDesabilitada ? confirmacaoDesabilitada : false} />
+              ))}
         </li>
       ))}
     </ol>

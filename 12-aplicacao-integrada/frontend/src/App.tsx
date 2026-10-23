@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import "./App.css";
+import type {EstadoDaConfirmacao,} from "./componentes.tsx"
 import {
   AreaErro,
   FormularioMensagem,
@@ -7,7 +8,7 @@ import {
   ListaMensagens,
   type MensagemExibida,
 } from "./componentes.tsx";
-import { criarConversa, enviarMensagem } from "./api.ts";
+import { confirmarProposta, criarConversa, enviarMensagem } from "./api.ts";
 
 // O backend guarda o histórico usado pelo modelo. Aqui ficam só as mensagens
 // necessárias à apresentação.
@@ -47,6 +48,10 @@ export default function App() {
   const [texto, setTexto] = useState<string>("");
   const [carregando, setCarregando] = useState<boolean>(false);
   const [erro, setErro] = useState<string | undefined>();
+  const [estadoProposta, setEstadoProposta] =
+    useState<Record<string, EstadoDaConfirmacao>>({});
+  const [confirmacaoDesabilitada, setConfirmacaoDesabilitada] =
+    useState<boolean>(false);
 
   // TODO 3: trate o envio do formulário (botão e Enter).
   // TODO 3.1: impeça envio vazio, sem conversa ou com envio em andamento.
@@ -60,39 +65,104 @@ export default function App() {
     evento.preventDefault();
 
     if (texto.trim().length === 0 || !conversaId || carregando === true) {
-      return
+      return;
     }
-    const novaMensagem: MensagemExibida = {id: crypto.randomUUID(), autor: "usuario", texto: texto.trim()}
-    setMensagens(anteriores => [...anteriores, novaMensagem])
-    setTexto("")
-    setErro(undefined)
-    setCarregando(true)
+    const novaMensagem: MensagemExibida = {
+      id: crypto.randomUUID(),
+      autor: "usuario",
+      texto: texto.trim(),
+    };
+    setMensagens((anteriores) => [...anteriores, novaMensagem]);
+    setTexto("");
+    setErro(undefined);
+    setCarregando(true);
 
-    const resultado = await enviarMensagem(conversaId, novaMensagem.texto)
+    const resultado = await enviarMensagem(conversaId, novaMensagem.texto);
 
     if (resultado.ok) {
       // TODO 7 (bloco 2): guarde resultado.dados.fontesConsultadas junto a
       // esta resposta do assistente, no campo fontesConsultadas da própria
       // mensagem. Não use uma lista global de fontes.
-      const respostaDoAssistente: MensagemExibida = {id: crypto.randomUUID(), autor: "assistente", texto: resultado.dados.resposta, fontesConsultadas: resultado.dados.fontesConsultadas}
-      setMensagens(anteriores => [...anteriores, respostaDoAssistente])
+      // TODO 9 (bloco 3): guarde também resultado.dados.propostas nesta
+      // mesma mensagem, no campo propostas. Não guarde propostas fora da
+      // mensagem a que pertencem.
+      const respostaDoAssistente: MensagemExibida = {
+        id: crypto.randomUUID(),
+        autor: "assistente",
+        texto: resultado.dados.resposta,
+        fontesConsultadas: resultado.dados.fontesConsultadas,
+        propostas: resultado.dados.propostas,
+      };
+      setMensagens((anteriores) => [...anteriores, respostaDoAssistente]);
     } else {
-      setErro(resultado.erro.mensagem)
+      setErro(resultado.erro.mensagem);
     }
 
+    setCarregando(false);
+  };
 
-    setCarregando(false)
+  // TODO 11 (bloco 3): crie a função que confirma uma proposta pelo
+  // propostaId, chamando confirmarProposta(conversaId, propostaId) de ./api.ts.
+  // O clique só inicia a tentativa; sucesso só depois da resposta do backend.
+  // TODO 11.1: guarde o estado de cada proposta separadamente
+  // (EstadoDaConfirmacao, de ./componentes.tsx) e marque "enviando" antes da
+  // chamada. Ignore cliques numa proposta que já está enviando ou concluída.
+  // TODO 11.2: em sucesso, guarde a confirmação devolvida pelo backend; o
+  // card mostra criação ou reutilização a partir dela.
+  // TODO 11.3: em falha, guarde a mensagem de erro, sem marcar sucesso.
+  // TODO 11.4: depois de um erro, um novo clique tenta de novo com a mesma
+  // proposta. Não reenvie automaticamente.
+  // TODO 11.5: passe à ListaMensagens os estados, a função de confirmação e
+  // o bloqueio externo (por exemplo, enquanto uma mensagem está sendo
+  // enviada).
 
+  const onConfirmarProposta = async (propostaId: string) => {
+    const situacaoAtual = estadoProposta[propostaId]?.situacao
+    if (situacaoAtual === "enviando" || situacaoAtual === "concluida") {
+      return
+    }
+    
+    setEstadoProposta((anteriores) => ({
+      ...anteriores,
+      [propostaId]: { situacao: "enviando" },
+    }));
+    setConfirmacaoDesabilitada(true);
+    const confirmar = await confirmarProposta(conversaId, propostaId);
+
+    if (confirmar.ok === false) {
+      setEstadoProposta((anteriores) => ({
+        ...anteriores,
+        [propostaId]: {
+          situacao: "erro",
+          mensagem: confirmar.erro.mensagem,
+        },
+      }));
+    } else {
+      setEstadoProposta((anteriores) => ({
+        ...anteriores,
+        [propostaId]: {
+          situacao: "concluida",
+          confirmacao: confirmar.dados,
+        },
+      }));
+    }
+
+    setConfirmacaoDesabilitada(false);
   };
 
   return (
     <main className="chat">
       <header className="chat__cabecalho">
         <h1>Assistente de agenda</h1>
-        <p>Consulta de horários e políticas de atendimento. Dados fictícios.</p>
+        <p>Horários, políticas e propostas de agendamento. Dados fictícios.</p>
       </header>
 
-      <ListaMensagens mensagens={mensagens} />
+      <ListaMensagens
+        mensagens={mensagens}
+        confirmacaoDesabilitada={confirmacaoDesabilitada || carregando}
+        estadosDasPropostas={estadoProposta}
+        onConfirmarProposta={onConfirmarProposta}
+      />
       <IndicadorCarregamento visivel={carregando} />
       <AreaErro mensagem={erro} />
 
@@ -103,7 +173,7 @@ export default function App() {
         // TODO 4.1: ligue o formulário ao tratamento do TODO 3.
         onSubmit={(evento) => handleSubmit(evento)}
         // TODO 4.2: bloqueie botão e Enter enquanto carrega ou sem conversa.
-        desabilitado={carregando||!conversaId}
+        desabilitado={carregando || !conversaId}
       />
     </main>
   );

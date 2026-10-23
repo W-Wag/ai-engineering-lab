@@ -1,5 +1,6 @@
 import type Groq from "groq-sdk";
 import { randomUUID } from "node:crypto";
+import type { PropostaExibida } from "./agendamentos.js";
 
 export type Mensagem = Groq.Chat.ChatCompletionMessageParam;
 
@@ -9,10 +10,14 @@ export type FonteConsultada = {
   secao: string;
 };
 
-/** Mensagens novas de uma rodada e as fontes trazidas por ferramentas nela. */
+/**
+ * Mensagens novas de uma rodada e o que as ferramentas produziram nela:
+ * fontes recuperadas e propostas preparadas.
+ */
 export type ResultadoRodada = {
   mensagens: Mensagem[];
   fontes: FonteConsultada[];
+  propostas: PropostaExibida[];
 };
 
 /**
@@ -22,12 +27,15 @@ export type ResultadoRodada = {
  */
 export type ProcessadorDeRodada = (
   mensagens: readonly Mensagem[],
+  contexto: { conversaId: string },
 ) => Promise<ResultadoRodada>;
 
 export type RespostaDaMensagem = {
   resposta: string;
   /** Fontes recuperadas durante esta mensagem, sem repetições. */
   fontesConsultadas: FonteConsultada[];
+  /** Propostas preparadas durante esta mensagem, todas, na ordem. */
+  propostas: PropostaExibida[];
 };
 
 function semRepeticoes(fontes: FonteConsultada[]): FonteConsultada[] {
@@ -130,12 +138,14 @@ export class RepositorioDeConversas {
         { role: "user", content: texto },
       ];
       const fontes: FonteConsultada[] = [];
+      const propostas: PropostaExibida[] = [];
 
       for (let rodada = 0; rodada < LIMITE_DE_RODADAS; rodada++) {
-        const { mensagens: novas, fontes: daRodada } =
-          await this.processarRodada(trabalho);
+        const resultado = await this.processarRodada(trabalho, { conversaId });
+        const novas = resultado.mensagens;
         trabalho.push(...novas);
-        fontes.push(...daRodada);
+        fontes.push(...resultado.fontes);
+        propostas.push(...resultado.propostas);
 
         const ultima = novas.at(-1);
         if (ultima === undefined) {
@@ -156,6 +166,7 @@ export class RepositorioDeConversas {
           return {
             resposta: ultima.content,
             fontesConsultadas: semRepeticoes(fontes),
+            propostas,
           };
         }
 
@@ -169,6 +180,50 @@ export class RepositorioDeConversas {
         "LIMITE_DE_RODADAS",
         "O limite de rodadas foi atingido sem resposta final.",
       );
+    } finally {
+      this.emProcessamento.delete(conversaId);
+    }
+  }
+
+  /**
+   * Executa uma ação síncrona da aplicação na conversa (a confirmação pelo
+   * botão) sob a mesma trava das mensagens: se uma mensagem estiver em
+   * processamento, falha com CONVERSA_OCUPADA. A trava é liberada também em
+   * caso de erro.
+   *
+   * Se a ação devolver um registro, ele entra no histórico como mensagem da
+   * aplicação, para as rodadas seguintes. Não é uma chamada de ferramenta e
+   * não usa tool_call_id.
+   */
+  executarAcaoDaAplicacao<T>(
+    conversaId: string,
+    acao: () => { resultado: T; registro?: string },
+  ): T {
+    const historico = this.historicos.get(conversaId);
+    if (historico === undefined) {
+      throw new ErroDeConversa(
+        "CONVERSA_NAO_ENCONTRADA",
+        "Conversa não encontrada.",
+      );
+    }
+
+    if (this.emProcessamento.has(conversaId)) {
+      throw new ErroDeConversa(
+        "CONVERSA_OCUPADA",
+        "Já existe uma operação em andamento nesta conversa.",
+      );
+    }
+
+    this.emProcessamento.add(conversaId);
+    try {
+      const { resultado, registro } = acao();
+      if (registro !== undefined) {
+        historico.push({
+          role: "system",
+          content: `Registro da aplicação: ${registro}`,
+        });
+      }
+      return resultado;
     } finally {
       this.emProcessamento.delete(conversaId);
     }

@@ -8,6 +8,7 @@ import {
   executarChamada,
   type BuscadorDePoliticas,
 } from "../ferramentas.js";
+import { SESSAO_FICTICIA, ServicoDeAgendamentos } from "../agendamentos.js";
 import { INSTRUCOES_SYSTEM } from "../instrucoes.js";
 import { ranquearPoliticas } from "../politicas.js";
 import { criarProcessadorDeRodada, type ChamadorDeModelo } from "../rodada.js";
@@ -30,6 +31,14 @@ const buscaSimulada =
     encontrado: true,
     trecho: { conteudo: `trecho sobre ${consulta}`, fonte: "/caminho/absoluto/manual.md", secao },
   });
+
+/** Contexto mínimo das ferramentas para os testes de despacho. */
+const ctx = (buscarPoliticas: BuscadorDePoliticas) => ({
+  buscarPoliticas,
+  agendamentos: new ServicoDeAgendamentos(),
+  sessao: SESSAO_FICTICIA,
+  conversaId: "c-teste",
+});
 
 /**
  * Modelo simulado: pede a ferramenta indicada pelo texto do usuário e, depois
@@ -64,7 +73,7 @@ const modeloSimulado: ChamadorDeModelo = async (mensagens) => {
 
 function app(buscar: BuscadorDePoliticas) {
   return construirApp({
-    processarRodada: criarProcessadorDeRodada(modeloSimulado, buscar),
+    processarRodada: criarProcessadorDeRodada(modeloSimulado, { buscarPoliticas: buscar, agendamentos: new ServicoDeAgendamentos(), sessao: SESSAO_FICTICIA }),
     instrucoesSystem: INSTRUCOES_SYSTEM,
   });
 }
@@ -86,7 +95,7 @@ test("definições: disponibilidade preservada e consultarPoliticas com consulta
   const definicoes = criarDefinicoesDeFerramentas();
   assert.deepEqual(
     definicoes.map((d) => d.function?.name),
-    ["consultarDisponibilidade", "consultarPoliticas"],
+    ["consultarDisponibilidade", "consultarPoliticas", "prepararPropostaAgendamento"],
   );
   assert.deepEqual(definicoes[1]?.function?.parameters?.required, ["consulta"]);
   assert.equal(eConsultaPoliticasValida({ consulta: "taxa" }), true);
@@ -96,7 +105,7 @@ test("definições: disponibilidade preservada e consultarPoliticas com consulta
 });
 
 test("despacho: resultado associado ao tool_call_id, fonte sem caminho", async () => {
-  const politica = await executarChamada(chamada("abc", "consultarPoliticas", { consulta: " taxa " }), buscaSimulada("Cancelamento"));
+  const politica = await executarChamada(chamada("abc", "consultarPoliticas", { consulta: " taxa " }), ctx(buscaSimulada("Cancelamento")));
   assert.equal(politica.mensagem.role, "tool");
   assert.equal((politica.mensagem as { tool_call_id: string }).tool_call_id, "abc");
   const conteudo = JSON.parse(String(politica.mensagem.content));
@@ -105,15 +114,15 @@ test("despacho: resultado associado ao tool_call_id, fonte sem caminho", async (
   assert.equal(conteudo.trecho.fonte, "manual.md");
   assert.deepEqual(politica.fontes, [{ fonte: "manual.md", secao: "Cancelamento" }]);
 
-  const nada = await executarChamada(chamada("n", "consultarPoliticas", { consulta: "x" }), async () => ({ encontrado: false }));
+  const nada = await executarChamada(chamada("n", "consultarPoliticas", { consulta: "x" }), ctx(async () => ({ encontrado: false })));
   assert.deepEqual(nada.fontes, []);
   assert.equal(JSON.parse(String(nada.mensagem.content)).encontrado, false);
 
-  const disp = await executarChamada(chamada("d", "consultarDisponibilidade", { profissionalId: "ana", data: "2026-10-20" }), buscaSimulada("x"));
+  const disp = await executarChamada(chamada("d", "consultarDisponibilidade", { profissionalId: "ana", data: "2026-10-20" }), ctx(buscaSimulada("x")));
   assert.deepEqual(JSON.parse(String(disp.mensagem.content)), { horarios: ["09:00", "14:00"] });
   assert.deepEqual(disp.fontes, []);
 
-  await assert.rejects(() => executarChamada(chamada("j", "consultarPoliticas", "{quebrado"), buscaSimulada("x")), /JSON malformado/);
+  await assert.rejects(() => executarChamada(chamada("j", "consultarPoliticas", "{quebrado"), ctx(buscaSimulada("x"))), /JSON malformado/);
 });
 
 test("HTTP: fontes por mensagem, sem duplicação nem vazamento", async (t) => {
