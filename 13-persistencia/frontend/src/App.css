@@ -1,0 +1,216 @@
+.chat {
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 100%;
+  max-width: 720px;
+  min-height: 100vh;
+  margin: 0 auto;
+  padding: 16px;
+}
+
+.chat__cabecalho h1 {
+  margin: 0;
+  font-size: 1.4rem;
+}
+
+.chat__cabecalho p {
+  margin: 4px 0 0;
+  color: var(--texto-suave);
+  font-size: 0.9rem;
+}
+
+.mensagens {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 12px;
+  list-style: none;
+  overflow-y: auto;
+  border: 1px solid var(--borda);
+  border-radius: 8px;
+  background: var(--fundo-lista);
+}
+
+.mensagens__vazio {
+  color: var(--texto-suave);
+  text-align: center;
+}
+
+.mensagem {
+  max-width: 85%;
+  padding: 8px 12px;
+  border-radius: 8px;
+}
+
+.mensagem--usuario {
+  align-self: flex-end;
+  background: var(--fundo-usuario);
+}
+
+.mensagem--assistente {
+  align-self: flex-start;
+  background: var(--fundo-assistente);
+}
+
+.mensagem__autor {
+  display: block;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--texto-suave);
+}
+
+.mensagem__texto {
+  margin: 2px 0 0;
+  white-space: pre-wrap;
+}
+
+.carregando {
+  min-height: 1.2em;
+  margin: 0;
+  color: var(--texto-suave);
+  font-size: 0.9rem;
+}
+
+.erro {
+  margin: 0;
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: var(--fundo-erro);
+  color: var(--texto-erro);
+}
+
+.formulario {
+  display: flex;
+  gap: 8px;
+}
+
+.formulario__rotulo {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+}
+
+.formulario__campo {
+  flex: 1;
+  min-width: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--borda);
+  border-radius: 8px;
+  font: inherit;
+  background: var(--fundo);
+  color: inherit;
+}
+
+.formulario__botao {
+  padding: 10px 16px;
+  border: 0;
+  border-radius: 8px;
+  font: inherit;
+  font-weight: 600;
+  background: var(--destaque);
+  color: #fff;
+  cursor: pointer;
+}
+
+.formulario__botao:disabled,
+.formulario__campo:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.formulario__campo:focus-visible,
+.formulario__botao:focus-visible {
+  outline: 2px solid var(--destaque);
+  outline-offset: 2px;
+}
+
+.fontes {
+  margin-top: 8px;
+  padding-top: 6px;
+  border-top: 1px solid var(--borda);
+  font-size: 0.85rem;
+  color: var(--texto-suave);
+}
+
+.fontes__titulo {
+  margin: 0;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.fontes__lista {
+  margin: 2px 0 0;
+  padding-left: 18px;
+}
+
+.proposta {
+  margin-top: 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--borda);
+  border-radius: 8px;
+  background: var(--fundo);
+}
+
+.proposta__titulo {
+  margin: 0 0 6px;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.proposta__dados {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 2px 12px;
+  margin: 0 0 8px;
+  font-size: 0.9rem;
+}
+
+.proposta__dados dt {
+  color: var(--texto-suave);
+}
+
+.proposta__dados dd {
+  margin: 0;
+}
+
+.proposta__botao {
+  padding: 8px 14px;
+  border: 0;
+  border-radius: 8px;
+  font: inherit;
+  font-weight: 600;
+  background: var(--destaque);
+  color: #fff;
+  cursor: pointer;
+}
+
+.proposta__botao:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.proposta__botao:focus-visible {
+  outline: 2px solid var(--destaque);
+  outline-offset: 2px;
+}
+
+.proposta__status {
+  min-height: 1.2em;
+  margin: 6px 0 0;
+  font-size: 0.9rem;
+}
+
+.proposta__erro {
+  margin: 6px 0 0;
+  padding: 6px 10px;
+  border-radius: 6px;
+  background: var(--fundo-erro);
+  color: var(--texto-erro);
+  font-size: 0.9rem;
+}
