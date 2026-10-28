@@ -197,7 +197,10 @@ Conclusões:
 
 ## Como executar
 
-O módulo é executado com Node pelo WSL. Na pasta `08-rag-integrado`:
+O módulo roda com Node 24 em Linux, macOS ou Windows; os comandos `npm`
+abaixo são os mesmos em qualquer terminal. Instale as dependências no mesmo
+sistema em que for executar: `node_modules` contém binários específicos de
+cada plataforma. Na pasta `08-rag-integrado`:
 
 ```bash
 npm install

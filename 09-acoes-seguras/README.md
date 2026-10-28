@@ -178,8 +178,10 @@ Próximo estudo: idempotência, ainda não implementada.
 
 ## Como executar
 
-O módulo é executado com Node pelo WSL e usa apenas `tsx` e `typescript`
-como dependências de desenvolvimento. Não precisa de API nem de credencial.
+O módulo roda com Node 24 em Linux, macOS ou Windows, e usa apenas `tsx` e
+`typescript` como dependências de desenvolvimento. Não precisa de API nem de
+credencial. Instale as dependências no mesmo sistema em que for executar; os
+comandos `npm` abaixo são os mesmos em qualquer terminal.
 
 Na pasta `09-acoes-seguras`:
 

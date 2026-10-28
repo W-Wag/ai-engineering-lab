@@ -190,9 +190,10 @@ uma estratégia geral de coordenação concorrente ou distribuída.
 
 ## Como executar
 
-O módulo é executado com Node pelo WSL e usa apenas `tsx` e `typescript`
-como dependências de desenvolvimento. Não chama APIs externas nem precisa de
-credencial.
+O módulo roda com Node 24 em Linux, macOS ou Windows, e usa apenas `tsx` e
+`typescript` como dependências de desenvolvimento. Não chama APIs externas
+nem precisa de credencial. Instale as dependências no mesmo sistema em que for
+executar; os comandos `npm` abaixo são os mesmos em qualquer terminal.
 
 Na pasta `10-idempotencia`:
 

@@ -70,19 +70,23 @@ O backend reutiliza, sem alterá-los, código dos módulos anteriores:
 
 ### Configuração e execução
 
-O módulo é executado com Node pelo WSL. A chave da Groq fica no arquivo `.env`
-da raiz do repositório, na variável `GROQ_API_KEY`, lida apenas pelo backend
-por meio de `shared/env.ts`. Nenhuma credencial vai para o frontend, e não há
-variáveis `VITE_*`.
+O módulo roda com Node 24 em Linux, macOS ou Windows; os comandos `npm`
+abaixo são os mesmos em qualquer terminal. Instale as dependências no mesmo
+sistema em que for executar: `node_modules` contém binários específicos de
+cada plataforma (esbuild, Vite, oxlint e os do módulo 06).
+
+A chave da Groq fica no arquivo `.env` da raiz do repositório, na variável
+`GROQ_API_KEY`, lida apenas pelo backend por meio de `shared/env.ts`. Nenhuma
+credencial vai para o frontend, e não há variáveis `VITE_*`.
 
 Como o backend importa código de outros módulos, as dependências deles também
-precisam estar instaladas:
+precisam estar instaladas. Na raiz do repositório:
 
 ```bash
-(cd 04-contexto && npm install)
-(cd 06-embeddings && npm install)
-(cd 12-aplicacao-integrada/backend && npm install)
-(cd 12-aplicacao-integrada/frontend && npm install)
+npm install --prefix 04-contexto
+npm install --prefix 06-embeddings
+npm install --prefix 12-aplicacao-integrada/backend
+npm install --prefix 12-aplicacao-integrada/frontend
 ```
 
 Execução, em dois terminais:
@@ -100,17 +104,15 @@ npm run dev
 Em desenvolvimento, o navegador fala só com o Vite, que repassa as rotas
 `/conversas` ao backend por proxy.
 
-Verificações:
+Verificações, na raiz do repositório:
 
 ```bash
-cd 12-aplicacao-integrada/backend
-npm run typecheck
-npm test
+npm run typecheck --prefix 12-aplicacao-integrada/backend
+npm test --prefix 12-aplicacao-integrada/backend
 
-cd 12-aplicacao-integrada/frontend
-npm run typecheck
-npm run build
-npm run lint
+npm run typecheck --prefix 12-aplicacao-integrada/frontend
+npm run build --prefix 12-aplicacao-integrada/frontend
+npm run lint --prefix 12-aplicacao-integrada/frontend
 ```
 
 ### O que usa a Groq

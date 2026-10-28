@@ -209,10 +209,12 @@ Neste cenário, apenas o ranking foi executado; nenhuma resposta foi gerada.
 
 ## Como executar
 
-O módulo é executado com Node pelo WSL. As dependências incluem binários
-nativos do `onnxruntime-node`, portanto a instalação e a execução devem ser
-feitas no mesmo ambiente, sem misturar executáveis Windows com dependências
-Linux. A preparação usou Node v24.21.0.
+O módulo roda com Node 24 em Linux, macOS ou Windows; os comandos `npm`
+abaixo são os mesmos em qualquer terminal. As dependências incluem binários
+nativos (`onnxruntime-node` e `sharp`), por isso instale-as no mesmo sistema
+em que for executar: uma pasta `node_modules` copiada de outro sistema (por
+exemplo, entre o WSL e o Windows) não funciona. A preparação usou Node
+v24.21.0 no WSL.
 
 Na pasta `06-embeddings`:
 
@@ -222,8 +224,11 @@ npm run typecheck
 npm start
 ```
 
-- `npm install` ocupa cerca de 762 MB em `node_modules`, dos quais 548 MB são
-  do `onnxruntime-node`.
+- Na instalação feita em Linux, `node_modules` ocupou cerca de 762 MB, dos
+  quais 548 MB eram do `onnxruntime-node`. O tamanho varia conforme o
+  sistema.
+- O cache do modelo fica dentro de `node_modules`. Apagar ou reinstalar as
+  dependências apaga o cache, e o próximo uso baixa o modelo de novo.
 - O npm não executa os scripts de instalação de `onnxruntime-node` e
   `protobufjs`, que não estão em `allowScripts`. A execução em CPU funcionou
   sem eles.

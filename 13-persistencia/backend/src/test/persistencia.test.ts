@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { test } from "node:test";
+import { after, test } from "node:test";
 import type Groq from "groq-sdk";
 import { SESSAO_FICTICIA, ServicoDeAgendamentos } from "../agendamentos.js";
 import { construirApp } from "../app.js";
@@ -65,9 +65,16 @@ function subir(caminho: string, sessao = SESSAO_FICTICIA) {
   };
 }
 
-function arquivoTemporario(t: { after: (fn: () => void) => void }): string {
+// Pastas temporárias são apagadas só no fim do arquivo, depois que os testes
+// fecharam seus bancos: no Windows, um arquivo aberto não pode ser removido.
+const pastasTemporarias: string[] = [];
+after(() => {
+  for (const pasta of pastasTemporarias) rmSync(pasta, { recursive: true, force: true });
+});
+
+function arquivoTemporario(_t?: unknown): string {
   const pasta = mkdtempSync(join(tmpdir(), "persistencia13-"));
-  t.after(() => rmSync(pasta, { recursive: true, force: true }));
+  pastasTemporarias.push(pasta);
   return join(pasta, "agenda.sqlite");
 }
 

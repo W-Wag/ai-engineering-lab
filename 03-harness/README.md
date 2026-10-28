@@ -199,11 +199,12 @@ dependências simuladas, não o comportamento de um modelo real nem a
 disponibilidade de APIs.
 
 Os testes e o typecheck são executados pelos scripts `test` e `typecheck` do
-`package.json`. A validação relatada pelo usuário foi realizada com Node Linux
-no WSL, carregado via `nvm`, e com as dependências instaladas nesse mesmo
-ambiente. Mantenha Node, npm e `node_modules` no mesmo ambiente; misturar
-executáveis Windows com dependências Linux pode impedir a execução de `tsx`,
-`tsc` e binários nativos.
+`package.json`, com os mesmos comandos `npm` em Linux, macOS ou Windows.
+Instale as dependências no mesmo sistema em que for executar: `node_modules`
+contém binários específicos de cada plataforma, e uma instalação copiada de
+outro sistema (por exemplo, entre o WSL e o Windows) pode impedir a execução
+de `tsx`, `tsc` e dos binários nativos. A validação relatada abaixo foi feita
+com Node no WSL.
 
 O usuário relatou typecheck aprovado, seis testes executados, seis aprovados,
 zero falhas e nenhuma API externa chamada. Esse é um registro relatado, não

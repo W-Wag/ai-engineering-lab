@@ -138,9 +138,15 @@ didático alcançado.
 
 ## Como executar
 
-O módulo é executado com Node pelo WSL e usa apenas `tsx` e `typescript`
-como dependências de desenvolvimento. Não precisa de API, credencial ou
-embeddings.
+O módulo roda com Node 24 em Linux, macOS ou Windows, e usa apenas `tsx` e
+`typescript` como dependências de desenvolvimento. Não precisa de API,
+credencial ou embeddings. Instale as dependências no mesmo sistema em que for
+executar; os comandos `npm` abaixo são os mesmos em qualquer terminal.
+
+A divisão por seções separa as linhas por `\n`. Se o documento estiver com
+quebras de linha do Windows (CRLF), o que pode acontecer quando o Git está com
+`core.autocrlf=true`, o caractere `\r` fica no meio do conteúdo dos trechos.
+O nome da seção não é afetado.
 
 Na pasta `07-chunking`:
 

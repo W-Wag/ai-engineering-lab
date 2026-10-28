@@ -239,17 +239,27 @@ DevTools.
 
 ## Execução
 
-O módulo é executado com Node pelo WSL. O backend importa código dos módulos
-03, 04, 06, 07, 08 e 09; os módulos 04 e 06 precisam das dependências
-instaladas. A chave da Groq fica na variável `GROQ_API_KEY`, no `.env` da raiz
-do repositório, e é lida apenas pelo backend.
+O módulo roda com Node 24 em Linux, macOS ou Windows. O `node:sqlite` exige
+Node 22.13 ou mais recente. Instale as dependências no mesmo sistema em que
+for executar: `node_modules` contém binários específicos de cada plataforma.
+
+O backend importa código dos módulos 03, 04, 06, 07, 08 e 09; os módulos 04 e
+06 precisam das dependências instaladas. A chave da Groq fica na variável
+`GROQ_API_KEY`, no `.env` da raiz do repositório, e é lida apenas pelo
+backend.
+
+Na raiz do repositório:
 
 ```bash
-(cd 04-contexto && npm install)
-(cd 06-embeddings && npm install)
-(cd 13-persistencia/backend && npm install)
-(cd 13-persistencia/frontend && npm install)
+npm install --prefix 04-contexto
+npm install --prefix 06-embeddings
+npm install --prefix 13-persistencia/backend
+npm install --prefix 13-persistencia/frontend
 ```
+
+Os comandos `npm` são os mesmos em qualquer terminal. Só a forma de definir
+variáveis de ambiente muda; por isso, os exemplos com variáveis aparecem em
+duas versões: Bash (Linux, macOS, WSL, Git Bash) e PowerShell (Windows).
 
 Executar, em dois terminais:
 
@@ -263,41 +273,59 @@ cd 13-persistencia/frontend
 npm run dev
 ```
 
-Escolher o banco e ligar a falha simulada, na pasta `backend`:
+Escolher o banco e ligar a falha simulada, na pasta `backend`.
+
+Bash:
 
 ```bash
 CAMINHO_DO_BANCO=dados/investigacao.sqlite npm start                       # falha desligada
 CAMINHO_DO_BANCO=dados/investigacao.sqlite FALHAR_APOS_CRIAR=1 npm start   # falha ligada
 ```
 
-Para desligar a falha, encerre o backend e inicie de novo sem a variável. Na
-investigação, use `npm start`, e não `npm run dev`, para que o reinício seja
+Em Bash, a variável escrita antes do comando vale só para aquele comando.
+Para desligar a falha, encerre o backend e inicie de novo sem ela.
+
+PowerShell:
+
+```powershell
+$env:CAMINHO_DO_BANCO = "dados/investigacao.sqlite"
+$env:FALHAR_APOS_CRIAR = "1"           # liga a falha
+npm start
+
+Remove-Item Env:FALHAR_APOS_CRIAR      # desliga a falha
+npm start
+```
+
+Em PowerShell, `$env:` vale até o terminal ser fechado. Antes de reiniciar com
+a falha desligada, remova a variável, como acima.
+
+Na investigação, use `npm start`, e não `npm run dev`, para que o reinício seja
 controlado.
 
-Inspecionar os registros, em modo somente leitura:
+Inspecionar os registros, em modo somente leitura, com `CAMINHO_DO_BANCO`
+definido como acima:
 
 ```bash
-CAMINHO_DO_BANCO=dados/investigacao.sqlite npm run inspecionar
-CAMINHO_DO_BANCO=dados/investigacao.sqlite npm run inspecionar -- <propostaId>
+npm run inspecionar
+npm run inspecionar -- <propostaId>
 ```
 
-Repetir uma confirmação sem a interface:
+Repetir uma confirmação sem a interface. O `curl` vem no Linux, no macOS e no
+Windows 10 ou mais recente; no PowerShell 7, `curl` chama esse mesmo programa.
+O comando cabe numa linha só para funcionar em qualquer terminal:
 
 ```bash
-curl -s -w ' [%{http_code}]\n' -X POST -H 'content-type: application/json' -d '{}' \
-  http://127.0.0.1:3001/conversas/<conversaId>/propostas/<propostaId>/confirmar
+curl -s -X POST -H "content-type: application/json" -d "{}" http://127.0.0.1:3001/conversas/<conversaId>/propostas/<propostaId>/confirmar
 ```
 
-Verificações:
+Verificações, na raiz do repositório:
 
 ```bash
-cd 13-persistencia/backend
-npm run typecheck
-npm test
+npm run typecheck --prefix 13-persistencia/backend
+npm test --prefix 13-persistencia/backend
 
-cd 13-persistencia/frontend
-npm run build
-npm run lint
+npm run build --prefix 13-persistencia/frontend
+npm run lint --prefix 13-persistencia/frontend
 ```
 
 - **Consome a Groq:** cada mensagem válida enviada pelo chat, inclusive as que

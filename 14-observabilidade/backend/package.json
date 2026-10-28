@@ -1,0 +1,26 @@
+{
+  "name": "estudo-14-backend",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/server.ts",
+    "start": "tsx src/server.ts",
+    "inspecionar": "tsx src/inspecionar.ts",
+    "simular": "tsx src/simular.ts",
+    "typecheck": "tsc --noEmit",
+    "test": "tsx --test \"src/test/**/*.test.ts\""
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.2",
+    "tsx": "^4.0.0",
+    "typescript": "^6.0.0"
+  },
+  "dependencies": {
+    "fastify": "^5.12.7",
+    "groq-sdk": "^1.6.0"
+  },
+  "allowScripts": {
+    "esbuild@0.28.2": true
+  }
+}

@@ -180,7 +180,9 @@ Maria”, mas a aplicação bloqueia e mantém zero gravações.
 
 ## Como executar
 
-O módulo é executado com Node pelo WSL. Na pasta `11-conteudo-nao-confiavel`:
+O módulo roda com Node 24 em Linux, macOS ou Windows; os comandos `npm`
+abaixo são os mesmos em qualquer terminal. Instale as dependências no mesmo
+sistema em que for executar. Na pasta `11-conteudo-nao-confiavel`:
 
 ```bash
 npm install
