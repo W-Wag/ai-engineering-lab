@@ -1,0 +1,19 @@
+{
+  "name": "estudo-16-revisoes-controladas",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "tsx src/exercicio.ts",
+    "investigar": "tsx src/investigacao.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.2",
+    "tsx": "^4.0.0",
+    "typescript": "^6.0.0"
+  },
+  "allowScripts": {
+    "esbuild@0.28.2": true
+  }
+}
